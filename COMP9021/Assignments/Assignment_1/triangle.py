@@ -74,7 +74,7 @@ while True:
         try:
             ans2 = int(input(q2))
             # check if given value is large than zero
-            if ans2 > 0:
+            if ans2 >= 0:
                 break
             raise ValueError
         except ValueError:
