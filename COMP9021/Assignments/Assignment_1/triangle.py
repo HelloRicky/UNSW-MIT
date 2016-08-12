@@ -29,6 +29,7 @@ path_new_sub = []               # store sub list of all childen item after each 
 
 leftMost = False                # return True if the first leftMost path that meet the largest sum is found
 path_count = 0                  # record the total number of pathes that meet the largest sum
+leftMost_list = []              # initital output list
 #-----------Functions below
 
 def checkFileExist(filename):
