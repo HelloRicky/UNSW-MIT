@@ -55,9 +55,9 @@ print('The generated list is:')
 print('  ', L)
 
 # my code below
-
-arrange_list(L)
-L = final_L
+while L:
+    arrange_list(L)
+    L = final_L
 
 print('The transformed list is:')
 print('  ', L)
