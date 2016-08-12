@@ -33,7 +33,7 @@ while True:
         try:
             ans2 = int(input(q2))
             # check if given value is large than zero
-            if ans2 > 0:
+            if ans2 >= 0:
                 break
             raise ValueError
         except ValueError:
@@ -81,24 +81,3 @@ while True:
     final_hight = (left_vol/ blk_val) + blk_key
     break
 print("The water rises to {:.2f} centimetres".format(final_hight))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
