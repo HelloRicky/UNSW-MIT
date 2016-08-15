@@ -11,7 +11,8 @@ from sys import exit
 #-----------Initialise all variable below
 
 q1 = "Which data file do you want to use?"
-err1 = "Given file name doesn't exit in working directory!!"
+err1 = "Given file name doesn't exit in working directory!"
+err3 = "Given file is empty."
 array = []              # content of input file
 min_fish = 0            # the least fish available in town
 tot_dist = 0            # total transport distance in between all towns
@@ -45,6 +46,11 @@ Read input text file and store data to array
 """
 with open(fname) as f:
     content = f.readlines()
+
+# check if file is empty
+if len(content) == 0:
+    print(err3)
+    exit()
 
 for lines in content:
     lines.strip()

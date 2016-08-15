@@ -12,8 +12,9 @@ from sys import exit
 
 q1 = "Which data file do you want to use?"
 q2 = "The largest sum is:"
-err1 = "Given file name doesn't exit in working directory!!"
-err2 = "Please give me a nonnegative integer!!"
+err1 = "Given file name doesn't exit in working directory!"
+err2 = "Please give me a nonnegative integer!"
+err3 = "Given file is empty."
 msg1 = "The number of paths yielding this sum is:"
 msg2 = "The leftmost path yielding this sum is:"
 
@@ -92,9 +93,16 @@ Read input text file and store data to array
 with open(fname) as f:
     content = f.readlines()
 
+# check if file is empty
+if len(content) == 0:
+    print(err3)
+    exit()
+
 for lines in content:
     lines.strip()
     array.append(lines.split()) #append individual digit
+
+
 
 """
 
@@ -168,7 +176,7 @@ for i in path_all:
     if sum_val == ans2:
         path_count += 1                 # count yielding path
         if leftMost == False:
-            leftMost_list = map(int, i)           # record the leftMost path
+            leftMost_list = list(map(int, i))          # record the leftMost path
             leftMost = True
 
 print(msg1,path_count)

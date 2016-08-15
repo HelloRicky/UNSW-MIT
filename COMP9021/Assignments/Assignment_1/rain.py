@@ -12,8 +12,9 @@ from sys import exit
 
 q1 = "Which data file do you want to use?"
 q2 = "How many decilitres of water do you want to poor down?"
-err1 = "Given file name doesn't exit in working directory!!"
-err2 = "Please give me a nonnegative integer!!"
+err1 = "Given file name doesn't exit in working directory!"
+err2 = "Please give me a nonnegative integer!"
+err3 = "Given file is empty."
 blocks = {}
 
 #-----------Functions below
@@ -45,6 +46,11 @@ while True:
 
 with open(fname) as f:
     content = f.readlines()
+
+# check if file is empty
+if len(content) == 0:
+    print(err3)
+    exit()
 
 for line in content:
     line.strip()
@@ -80,4 +86,4 @@ while True:
     left_vol = ans2 - prev_vol
     final_hight = (left_vol/ blk_val) + blk_key
     break
-print("The water rises to {:.2f} centimetres".format(final_hight))
+print("The water rises to {:.2f} centimetres.".format(final_hight))
