@@ -65,7 +65,10 @@ Three senarios:
 2. if all town has the same amount of fish
 >>> no transportation required
 
-3. non-equal amount of fish in between towns, distance is within losting rate
+3. if the final average result is less than the initial amount (e.g. (5 80)(15 85))
+>>> no transportation required
+
+4. non-equal amount of fish in between towns, distance is within losting rate
 >>> losting fish = sum(towns distance differences) * losting fish rate 
 total_fish = sum(total fish available in all towns) - losting fish
 min fish available = total_fish / total_sites
@@ -89,11 +92,12 @@ if tot_site:
         if site_fish < min_fish:            # update minimum fish number
             min_fish = site_fish
     
-    if tot_fish < tot_dist or len(each_town_fish) == 1:     # cast 1 and 2 loop below:
+    if tot_fish < tot_dist or len(each_town_fish) == 1:     # cast 1 and 2 below:
         avg_fish = min_fish
     else:
-        net_fish = tot_fish - tot_dist * fish_lost_rate     # cast 3 loop below:
+        net_fish = tot_fish - tot_dist * fish_lost_rate     # cast 4 below:
         avg_fish = int(net_fish / tot_site)
-    
+        if avg_fish < min_fish:                             # cast 3 below:
+            avg_fish = min_fish
 print("The maximum quantity of fish that each town can have is {}.".format(avg_fish))
     
