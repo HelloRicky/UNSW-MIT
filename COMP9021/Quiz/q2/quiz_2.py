@@ -6,10 +6,6 @@
 
 
 from math import sqrt
-from math import atan2, pi, ceil
-
-hcd = 180.0 #half circle degrees
-shift_dgr = 45.0
 
 """ 
 find max num in the loop x
@@ -29,6 +25,18 @@ def maxLoopNum(x):
             val += gap * face + corner
         return val
     return val
+
+def getXYdiff(x, y, diff):
+    x = abs(x)
+    y = abs(y)
+    if y == 0:
+        return 0
+    if y < x:
+        return y
+    if x == y:
+        return diff
+    if y > x:
+        return diff + (y - x)
 
 """
 get the coordination with the:
@@ -79,43 +87,34 @@ def getCoordination(orient_count, lp_num, mov):
         #print('x:',x, 'y:',y)
         return x, y
 """
-use the percentage of the bearing to find the position of n in 360 degress
+detect current loop
+find the difference between the coordination and the quarters
 """
 
 def encode(x, y):
-    loop_num = max(abs(x),abs(y))
-    if y == 0 and x >= 0:
-        bearing = 0
+    
+    if x == 0 and y ==0:
+        return 0
     else:
-        bearing = hcd / (pi/atan2(y,x))
+        loop_num = max(abs(x),abs(y))
+        based_num = maxLoopNum(loop_num - 1)
+        max_num = maxLoopNum(loop_num)
+        interval_val = max_num - based_num
+        quart_val = interval_val / 4
+        shift_val = quart_val / 2
+        diff = getXYdiff(x, y, shift_val)
         
-    bearing += shift_dgr
-
-    if bearing < 0:
-        bearing = 2*hcd + bearing
-        
-    #print('bearing is',bearing)
-    temp = 2*hcd
-    percent_bearing = bearing / (2*hcd)
-    #print('percentage of bearing', percent_bearing)
-
-    startNum = maxLoopNum(loop_num -1)
-
-    endNum = maxLoopNum(loop_num)
-    gapNum = endNum - startNum
-    if bearing == 0:
-        output = endNum
-    else:
-        output = int(round(gapNum*percent_bearing+startNum))
-
-    """
-    print('startNum',startNum)
-    print('endNum',endNum)
-    print('diff',gapNum)
-    print('bearing', bearing,'percentage>',percent_bearing)
-    """
-    #print('encode({},{})'.format(x, y))
-    return output
+        if x > 0 and y >= 0:
+            return int(based_num + diff + shift_val)
+        if x <= 0 and y > 0:
+            return int(based_num + quart_val*2 - diff + shift_val)
+        if x < 0 and y <= 0:
+            return int(based_num + quart_val*2 + diff + shift_val)
+        if x >= 0 and y < 0:
+            temp_val = based_num + quart_val*4 - diff + shift_val
+            if temp_val > max_num:
+                temp_val = based_num + (temp_val - max_num)
+            return int(temp_val)
 
 """
 1. find the loop level of the input n
@@ -156,8 +155,7 @@ def decode(n):
             x, y = getCoordination(orient_count, lp_num, mov)
             
             #print('decode({})'.format(n))
-            print('({:}, {:})'.format(int(x),int(y)))
-            break
+            return int(x), int(y)
         prev_point = point_val
 
 """
@@ -172,6 +170,7 @@ encode(-1, 0)
 encode(-1, -1)
 encode(0, -1)
 encode(1, -1)
+
 encode(2, -1)
 encode(2, 0)
 encode(2, 1)
