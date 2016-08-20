@@ -23,10 +23,10 @@ create domain OptionType as
 	varchar(12)	check (value in ('sunroof','moonroof','GPS','alloy wheels','leather'));
 
 create domain VINType as 
-	char(17) check (value ~ '[A-Z0-9]{17}' and value !~ '[IOQ]');  -- need to be fixed with upper case only
+	char(17) check (value ~ '[A-Z0-9]{17}' and value !~ '[IOQ]'); 
 
 create domain MonetaryType as 
-	numeric(8,2) check (value >= 0);  --2 decimal digits, not exceed 6 integral digits ??
+	numeric(8,2) check (value >= 0); 
 
 
 -- EMPLOYEE
@@ -35,26 +35,26 @@ create table Employee (
 	EID          serial, 
     firstname	 varchar(50) not null,
     lastname 	 varchar(50) not null,
-    salary       integer not null check (salary > 0),
+    salary       integer not null constraint ValidSalary check (salary > 0),
     TFN			 char(9) not null constraint ValidTFN check (TFN ~ '[0-9]{9}'),
 	primary key (EID)
 );
 
 create table Admin (
-	EID			serial references Employee(EID),
+	EID			 serial references Employee(EID),
 	primary key (EID)
 
 );
 
 create table Mechanic (
-	EID			serial references Employee(EID),
-	license 	char(8) not null check (license ~ '[0-9A-Za-z]{8}'),
+	EID			 serial references Employee(EID),
+	license 	 char(8) not null constraint ValidLicense check (license ~ '[0-9A-Za-z]{8}'),
 	primary key (EID)
 );
 
 create table Salesman (
-	EID			serial references Employee(EID),
-	commRate 	integer not null constraint ValidCommRate check (commRate >= 5 and commRate <= 20),
+	EID			 serial references Employee(EID),
+	commRate 	 integer not null constraint ValidCommRate check (commRate >= 5 and commRate <= 20),
 	primary key (EID) 	
 );
 
@@ -74,7 +74,7 @@ create table Client (
 create table Company (
 	CID 		 serial references Client(CID),
 	url 		 URLType,
-	ABN  		 char(11) not null constraint ValidABN check (ABN ~ '[0-9]{11}'), --need to check the boolean condition
+	ABN  		 char(11) not null constraint ValidABN check (ABN ~ '[0-9]{11}'),
 	primary key (CID)
 );
 
@@ -86,7 +86,7 @@ create table Car (
 	VIN 		 VINType,		
 	manufacturer varchar(40) not null,
 	model 		 varchar(40) not null,
-	year		 integer not null constraint ValidYear check (year >= 1970 and year <= 2099),		--double check with type
+	year		 integer not null constraint ValidYear check (year >= 1970 and year <= 2099),
 	primary key (VIN)
 );
 
@@ -103,15 +103,9 @@ create table Options (
 
 create table NewCar (
 	VIN 		  VINType references Car(VIN),
-	cost 		  MonetaryType not null,			-- should this be numeric or money???
+	cost 		  MonetaryType not null,
 	charges  	  MonetaryType not null,
-	seller	   	  serial,							-- partial participation
-	"date"	 	  date not null,
-	price 	  	  MonetaryType not null,
-	commission 	  MonetaryType not null,
-	plateNumber   varchar(6) not null,
-	primary key (VIN),
-	foreign key (seller) references Salesman(EID)
+	primary key (VIN)
 );
 
 -- USEDCAR
@@ -119,37 +113,28 @@ create table NewCar (
 create table UsedCar (
 	VIN  		 VINType references Car(VIN),
 	plateNumber  varchar(6) not null,
-	seller		 serial,							-- partial participation
-	buyer 	 	 serial,							-- partial participation
-	"date"	 	 date not null,
-	price 	  	 MonetaryType not null,
-	commission 	 MonetaryType not null,
-	primary key (VIN),
-	foreign key (seller) references Salesman(EID),
-	foreign key (buyer) references Salesman(EID)
+	primary key (VIN)
 );
 
 -- Repair Job
 
 create table RepairJob (
 	VIN			 VINType,
-	"number"  	 integer  check ("number" >= 1 and "number" <= 999),
+	"number"  	 integer  constraint ValidNumber check ("number" >= 1 and "number" <= 999),
 	description  varchar(250) not null,
 	parts  		 MonetaryType not null,
 	work 		 MonetaryType not null,
 	"date"  	 date not null,
-	repairs 	 VINType not null,
-	paidBy 		 serial not null,
+	CID 		 serial not null,					-- the job paid by client, total participation
 	primary key (VIN, "number"),
-	foreign key (VIN) references Car(VIN),
-	foreign key (repairs) references UsedCar(VIN),
-	foreign key (paidBy) references Client(CID)
+	foreign key (VIN) references UsedCar(VIN),
+	foreign key (CID) references Client(CID)
 );
 
 create table Does (
 	EID			 serial,
 	VIN			 VINType,
-	"number"  	 integer  check ("number" >= 1 and "number" <= 999),
+	"number"  	 integer  constraint ValidNumber check ("number" >= 1 and "number" <= 999),
 	primary key (EID, VIN, "number"),
 	foreign key (EID) references Mechanic(EID),
 	foreign key (VIN, "number") references RepairJob(VIN, "number")
@@ -157,41 +142,49 @@ create table Does (
 );
 
 create table Buys (
-	owner 	  	 serial,		--seller
 	VIN  		 VINType,
+	CID 	  	 serial,							-- seller
+	EID		 	 serial not null,
 	"date"	 	 date not null,
 	price 	  	 MonetaryType not null,
 	commission 	 MonetaryType not null,
-	primary key (owner, VIN),
-	foreign key (owner) references Client(CID),
-	foreign key (VIN) references Car(VIN)
+	primary key (CID, VIN, "date"),					-- assuming the same client may buy the same car mutiple times (e.g. buy -> sell -> buy back), 
+													-- but we only allow the same client to perform this action once a day with the same car
+	foreign key (CID) references Client(CID),
+	foreign key (VIN) references Car(VIN),
+	foreign key (EID) references Salesman(EID)
 	
 
 );
 
 create table Sells (
-
-	owner 	  	 serial,		-- buyer
 	VIN  		 VINType,
+	CID 	  	 serial,							-- buyer
+	EID 	 	 serial not null,
 	"date"	 	 date not null,
 	price 	  	 MonetaryType not null,
 	commission 	 MonetaryType not null,
-	primary key (owner, VIN),
-	foreign key (owner) references Client(CID),
-	foreign key (VIN) references Car(VIN)
+	primary key (CID, VIN, "date"),					-- assuming the same client may sell the same car mutiple times (e.g. sell -> buy -> sell out), 
+													-- but we only allow the same client to perform this action once a day with the same car
+	foreign key (CID) references Client(CID),
+	foreign key (VIN) references Car(VIN),
+	foreign key (EID) references Salesman(EID)
 
 );
 
 create table SellsNew (
 
-	owner 	  	 serial,		-- buyer
 	VIN  		 VINType,
+	CID 	  	 serial,							-- buyer
+	EID 	 	 serial not null,
 	"date"	 	 date not null,
 	price 	  	 MonetaryType not null,
 	commission 	 MonetaryType not null,
 	plateNumber  varchar(6) not null,
-	primary key (owner, VIN),
-	foreign key (owner) references Client(CID),
-	foreign key (VIN) references Car(VIN)
+	primary key (CID, VIN),							-- once the car is sold, any selling action with the same car is treated as 2nd hand,
+													-- hence, no need for adding "date" as part of the PK
+	foreign key (CID) references Client(CID),
+	foreign key (VIN) references Car(VIN),
+	foreign key (EID) references Salesman(EID)
 
 );
