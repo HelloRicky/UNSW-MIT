@@ -3,7 +3,7 @@ COMP9021 Assignment 1
 Task 2, Triangle
 Created by: Fu Zheng
 Created on: 12/08/2016
-Version 1.0
+Version 2.0
 """
 import os.path
 from sys import exit
@@ -11,26 +11,15 @@ from sys import exit
 #-----------Initialise all variable below
 
 q1 = "Which data file do you want to use?"
-q2 = "The largest sum is:"
 err1 = "Given file name doesn't exit in working directory!"
 err2 = "Please give me a nonnegative integer!"
 err3 = "Given file is empty."
-msg1 = "The number of paths yielding this sum is:"
-msg2 = "The leftmost path yielding this sum is:"
+msg1 = "The largest sum is:"
+msg2 = "The number of paths yielding this sum is:"
+msg3 = "The leftmost path yielding this sum is:"
 
 array = []                      # array to store each digit of each row from the input txt file
-collected_list = []             # store all the ordered element from the triangle, from top to bottom, left to right
-brk = "flag"                    # use flag to identify new path in the 'findChild' loop
 
-start_index = 0                 # find the first flag index in the collected_list
-base_list = []                  # based list as the first path
-path_all = []                   # store all the possible path
-path_new_sub = []               # store sub list of all childen item after each flag, will use it to update base_list
-
-
-leftMost = False                # return True if the first leftMost path that meet the largest sum is found
-path_count = 0                  # record the total number of pathes that meet the largest sum
-leftMost_list = []              # initital output list
 #-----------Functions below
 
 def checkFileExist(filename):
@@ -39,51 +28,47 @@ def checkFileExist(filename):
     """
     return os.path.isfile(filename)
 
-def findChild(root, index, lvl):
+def solve(tri):
 
-    """
-    root: current digit in current row
-    index: root's position in current row
-    lvl: child level of root (e.g. current lvl + 1)
+    while len(tri) > 1:
+        t0 = tri.pop()                          # extract last row
+        t1 = tri.pop()                          # extract 2nd last row
+        
+        val = []                                # empty val for each row
+        for i, t in enumerate(t1):
+            new_val = []
+            left = t0[i]
+            right = t0[i + 1]
+            maxVal = max(left[0], right[0]) + t # add the t value with max value of its leaf
+            
+            if left[0] == right[0]:             # if both equal, add up the possible path number
+                temp = left[1][:]
+                temp.append(t)
+                new_val = [maxVal, temp, left[2] + right[2]]
+            elif left[0] > right[0]:
+                temp = left[1][:]
+                temp.append(t)
+                new_val = [maxVal, temp, left[2]]
+            elif left[0] < right[0]:
+                temp = right[1][:]
+                temp.append(t)
+                new_val = [maxVal, temp, right[2]]
+                
+            val.append(new_val)                 # generate new last row
+        tri.append(val)                         # update triangle
+        
+    return tri[0][0]
 
-    ---- debug code ---------
-    print("current root", root, "<<<<")
-    print("current index", index)
-    print("current lvl", lvl)
-    """
-    level = array[lvl]                          # current root's child level
-    collected_list.append(root)                 # store root element
-    lvl += 1                                    # one level down from child's level
-    
-    if lvl < final_lvl:                         # while not reaching the bottom level
-        
-        findChild(level[index], index, lvl)     # left child path
-        collected_list.append(brk)              # insert flag for new path
-        #print('---running after index', index+1, lvl)
-        index = index + 1
-        #print('---level-root',level)
-        findChild(level[index], index, lvl)     # right child path
-        
-    return
 
 #question 1
+
 fname = input(q1)
 ans1 = checkFileExist(fname)
 while True:
     if ans1:
-        #question 2
-        try:
-            ans2 = int(input(q2))
-            # check if given value is large than zero
-            if ans2 >= 0:
-                break
-            raise ValueError
-        except ValueError:
-            print(err2)
-            exit()            
+        break   
     print(err1)
     exit()
-
 
 """
 
@@ -100,84 +85,34 @@ if len(content) == 0:
 
 for lines in content:
     lines.strip()
-    array.append(lines.split()) #append individual digit
-
-
+    array.append(list(map(int, lines.split()))) #append individual digit
 
 """
+Update last Row format to [a_1, [a_2], a_3]
 
-Add an additional empty row to the end of the array to represent null result
+a_1 = current max sum of the path
+a_2 = current max sum path
+a_3 = current possible path total count, start from 1
 
-   1    <----- root
-  1 1
- 1 1 1
-0 0 0 0 <----- emptyRow
+e.g.
 
-"""
-array_len = len(array[-1])      # find the size of the last row/list in array
-emptyRow = [0*(array_len + 1)]  # create a new row with size + 1
-array.append(emptyRow)          # add new row to array
+1
+2 2
+1 2 1
 
-root = array[0][0]              #initial root
-final_lvl = len(array)          #initial number of level to loop throught
+after reformat the last Row, it will be [[1, [1], 1], [2, [2], 1], [1, [1], 1]]
 
 """
-loop throught the triangle/array
-record the possible path
-"""
-findChild(root, 0, 1)           # start with top element, index 0 and child level at level 1
+lastRow = array.pop()
+array.append(list(map(lambda i: [i, [i], 1], lastRow)))
 
+result = solve(array)
 
-"""
-1. Arrangle the collected_list
-2. Form all the possible path
+#reverse leftmost path
+result[1].reverse()
 
-example:
-    collected_list = [1, 2, 3, 4, flag, 7, flag, 5, 6]
-    base_list = [1,2,3,4]
-    start_index = where the first flag is, 5
-    update and replace the base_list from the end part with elements after flag
-    hence, 2nd list will be [1, 2, 3, 7]
-    3rd list will be [1, 2, 5, 6]
+# output message:
+print(msg1, result[0])
+print(msg2, result[2])
+print(msg3, result[1])
 
-3. Find all the path that yields the largest sum
-"""
-
-# Set up the base_list
-
-for i in collected_list:
-    start_index += 1
-    if i == brk:
-        break
-    base_list.append(i)
-
-base_list_len = len(base_list)
-path_all.append(base_list[:])
-
-# Update base_list and replace childen item after flag to form a new path
-
-for i in collected_list[start_index:]:
-    
-    if i == brk:
-        sub_list_len = len(path_new_sub)
-        sub_list_start = base_list_len - sub_list_len
-        base_list[sub_list_start :] = path_new_sub
-        path_all.append(base_list[:])
-        path_new_sub = []
-    else:
-        path_new_sub.append(i)
-
-# Find the paths yield the largest sum
-
-for i in path_all:
-    sum_val = 0
-    for j in i:
-        sum_val += int(j)
-    if sum_val == ans2:
-        path_count += 1                 # count yielding path
-        if leftMost == False:
-            leftMost_list = list(map(int, i))          # record the leftMost path
-            leftMost = True
-
-print(msg1,path_count)
-print(msg2, leftMost_list)
