@@ -54,7 +54,8 @@ if len(content) == 0:
 
 for line in content:
     line.strip()
-    for val in line:
+    lines = line.split()
+    for val in lines:
         try:
             val = int(val)
         except:
