@@ -87,6 +87,7 @@ Generate output
 
 def GenerateText():
 	print('here is GenerateText')
+	print(maze)
 	
 def GeneratePdf():
 	print('here is GeneratePdf')
