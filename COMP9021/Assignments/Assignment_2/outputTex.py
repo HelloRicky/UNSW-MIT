@@ -11,6 +11,9 @@ M = len(maze)
 hor_lines = []
 ver_lines = []
 
+"""
+build walls
+"""
 def FindEndPoint_hor(i, j):
     val = maze[i][j]
     if val == '0' or val == '2':
@@ -48,8 +51,17 @@ for i in range(N):
             end_point = (i, j)            
             ver_lines.append([start_point,end_point])
         j += 1
-          
 
+hor_lines.extend(ver_lines)
+
+for i in hor_lines:
+    txt = '    \draw ({},{}) -- ({},{});\n'.format(i[0][0], i[0][1], i[1][0], i[1][1])
+    final_walls += txt
+       
+
+test1 = b"""
+hello\nricky
+"""
 
 content = r"""\documentclass[10pt]{{article}}
 \usepackage{{tikz}}
@@ -64,21 +76,21 @@ content = r"""\documentclass[10pt]{{article}}
 \begin{{center}}
 \begin{{tikzpicture}}[x=0.5cm, y=-0.5cm, ultra thick, blue]
 % Walls
-{}
-% Pillars
-{}
+{0}% Pillars
+{1}
 % Inner points in accessible cul-de-sacs
-{}
+{2}
 % Entry-exit paths without intersections
-{}
+{3}
 \end{{tikzpicture}}
 \end{{center}}
 \vspace*{{\fill}}
 
-\end{{document}}
-""".format('a','b','c','d')
+\end{{document}}""".format(final_walls,'b','c','d')
+content = content.encode('utf-8')
 
-"""
-with open('cover2.tex','w') as f:
+
+
+with open('cover2.tex','wb') as f:
     f.write(content)
-"""
+
