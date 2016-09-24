@@ -10,6 +10,8 @@ N = len(maze[0])
 M = len(maze)
 hor_lines = []
 ver_lines = []
+pillars = []
+
 
 """
 build walls
@@ -59,9 +61,42 @@ for i in hor_lines:
     final_walls += txt
        
 
-test1 = b"""
-hello\nricky
-"""
+# for pillars
+for i in range(M):
+    for j in range(N):
+        val = maze[i][j]
+        # only work for value '0'
+        if val == '0':
+            # check for first row
+            if i == 0:
+                #top left point
+                if j == 0:
+                    pillars.append((j, i))
+                    continue
+                # check left point if equal to 0 or 2
+                left_val = maze[i][j-1]
+                if left_val == '0' or left_val == '2':
+                    pillars.append((j, i))
+                    continue
+            # check for first item below first low
+            top_val = maze[i - 1][j]
+            if j == 0:
+                # check for one point above
+                if top_val == '0' or top_val == '1':
+                    pillars.append((j, i))
+                    continue
+            # check for rest point
+            left_val = maze[i][j-1]
+            if (top_val == '0' or top_val == '1') and (left_val == '0' or left_val == '2'):
+                pillars.append((j, i))
+
+for i in pillars:
+    txt = '    \\fill[green] ({},{}) circle(0.2);\n'.format(i[0], i[1])
+    final_Pillars += txt
+                
+            
+                
+                
 
 content = r"""\documentclass[10pt]{{article}}
 \usepackage{{tikz}}
@@ -77,16 +112,14 @@ content = r"""\documentclass[10pt]{{article}}
 \begin{{tikzpicture}}[x=0.5cm, y=-0.5cm, ultra thick, blue]
 % Walls
 {0}% Pillars
-{1}
-% Inner points in accessible cul-de-sacs
-{2}
-% Entry-exit paths without intersections
+{1}% Inner points in accessible cul-de-sacs
+{2}% Entry-exit paths without intersections
 {3}
 \end{{tikzpicture}}
 \end{{center}}
 \vspace*{{\fill}}
 
-\end{{document}}""".format(final_walls,'b','c','d')
+\end{{document}}""".format(final_walls, final_Pillars,'c','d')
 content = content.encode('utf-8')
 
 
