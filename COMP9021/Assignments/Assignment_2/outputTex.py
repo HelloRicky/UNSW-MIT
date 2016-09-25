@@ -1,11 +1,15 @@
-from copy import deepcopy
+"""
 
-maze = [['1', '0', '2', '2', '1', '2', '3', '0'], ['3', '2', '2', '1', '2', '0', '2', '2'], ['3', '0', '1', '1', '3', '1', '0', '0'],
-        ['2', '0', '3', '0', '0', '1', '2', '0'], ['3', '2', '2', '0', '1', '2', '3', '2'], ['1', '0', '0', '1', '1', '0', '0', '0']]
+maze = [['1', '0', '2', '2', '1', '2', '3', '0'], ['3', '2', '2', '1', '2', '0', '2', '2'], ['3', '0', '1', '1', '3', '1', '0', '0'], ['2', '0', '3', '0', '0', '1', '2', '0'],
+        ['3', '2', '2', '0', '1', '2', '3', '2'], ['1', '0', '0', '1', '1', '0', '0', '0']]
+"""
+maze = [['0', '2', '2', '3', '0', '2', '1', '2', '0', '2', '2', '2'], ['2', '2', '2', '2', '2', '3', '1', '1', '1', '0', '3', '2'], ['3', '0', '1', '3', '2', '2', '1', '3', '0', '3', '0', '2'],
+        ['3', '1', '2', '3', '2', '2', '2', '3', '2', '3', '3', '0'], ['0', '0', '1', '0', '0', '0', '1', '0', '0', '0', '0', '0']]
+
 
 final_walls = ""
 final_Pillars = ""
-final_points = ""
+final_red_cross = ""
 final_path = ""
 
 N = len(maze[0])    # row length
@@ -13,6 +17,7 @@ M = len(maze)       # col length
 hor_lines = []
 ver_lines = []
 pillars = []
+red_cross = []
 
 class space:
     def __init__(self, value = 0, N_wall = 0, S_wall = 0, W_wall = 0, E_wall = 0):
@@ -22,7 +27,7 @@ class space:
         self.W_wall = W_wall
         self.E_wall = E_wall
 
-mazePath = [[0]*(N-1) for _ in range(M - 1)]
+#mazePath = [[0]*(N-1) for _ in range(M - 1)]
 
 pathObject = []
 for i in range(M-1):
@@ -118,63 +123,7 @@ def DefineSpaceObject():
                         pathObject[i][j].E_wall = 1
                  
 
-
-
-
-def DefineSapce():
-    for i in range(M-1):
-        for j in range(N-1):
-            val_1 = maze[i][j]
-            val_2 = maze[i][j + 1]
-            val_3 = maze[i + 1][j]
-
-            if val_1 == '0':
-                if val_2 == '0' or val_2 == '1':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 4
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 3
-                        continue
-                if val_2 == '2' or val_2 == '3':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 3
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 2
-                        continue
-                    
-            if val_1 == '1' or val_1 == '2':
-                if val_2 == '0' or val_2 == '1':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 3
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 2
-                        continue
-                if val_2 == '2' or val_2 == '3':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 2
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 1
-                        continue
-
-            if val_1 == '3':
-                if val_2 == '0' or val_2 == '1':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 2
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 1
-                        continue
-                if val_2 == '2' or val_2 == '3':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 1
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 0                   
-                
+              
                
 
 """
@@ -263,6 +212,7 @@ for i in pillars:
 
 # copy mazePath without reference
 #cul_de_sacs = deepcopy(mazePath)
+    
 
 def MarkWay(i, j):
     space = pathObject[i][j]
@@ -274,62 +224,168 @@ def MarkWay(i, j):
             if i == 0:
                 if space.S_wall == 0 and pathObject[i + 1][j].value > 0:
                     pathObject[i + 1][j].value -= 1
+                    if pathObject[i + 1][j].value == 0:
+                        pathObject[i][j].value = 0
+                        return
+                    
                     MarkWay(i + 1, j)
+                    
+                    if pathObject[i + 1][j].value == 0:
+                        pathObject[i][j].value = 0
+                        return
             # for bottom line
             else:
                 if space.N_wall == 0 and pathObject[i - 1][j].value > 0:
                     pathObject[i - 1][j].value -= 1
+
+                    if pathObject[i - 1][j].value == 0:
+                        pathObject[i][j].value = 0
+                        return
+                    
                     MarkWay(i - 1, j)
+
+                    if pathObject[i - 1][j].value == 0:
+                        pathObject[i][j].value = 0
+                        return
             # for left most point
             if j == 0:                
                 if space.E_wall == 0 and pathObject[i][j + 1].value > 0:
                     pathObject[i][j + 1].value -= 1
+
+                    if pathObject[i][j + 1].value == 0:
+                        pathObject[i][j].value = 0
+                        return
+                    
                     MarkWay(i, j + 1)
+
+                    if pathObject[i][j + 1].value == 0:
+                        pathObject[i][j].value = 0
+                        return
             # for right most point
             if j == N - 2:
                 if space.W_wall == 0 and pathObject[i][j - 1].value > 0:
                     pathObject[i][j - 1].value -= 1
+
+                    if pathObject[i][j - 1].value == 0:
+                        pathObject[i][j].value = 0
+                        return
                     MarkWay(i, j - 1)
+
+                    if pathObject[i][j - 1].value == 0:
+                        pathObject[i][j].value = 0
+                        return
             # for left and right
             if space.E_wall == 0 and pathObject[i][j + 1].value > 0:
+                
+                
                 pathObject[i][j + 1].value -= 1
+
+                if pathObject[i][j + 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
+                
                 MarkWay(i, j + 1)
+
+                if pathObject[i][j + 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
             if space.W_wall == 0 and pathObject[i][j - 1].value > 0:
                 pathObject[i][j - 1].value -= 1
+
+                if pathObject[i][j - 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
                 MarkWay(i, j - 1)
+
+                if pathObject[i][j - 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
             return
         
         # lines in between top and bottom lines
         # look for bottom line
         if space.S_wall == 0 and pathObject[i + 1][j].value > 0:
             pathObject[i + 1][j].value -= 1
+
+            if pathObject[i + 1][j].value == 0:
+                pathObject[i][j].value = 0
+                return
             MarkWay(i + 1, j)
+
+            if pathObject[i + 1][j].value == 0:
+                pathObject[i][j].value = 0
+                return
                 
         # look for top line
         if space.N_wall == 0 and pathObject[i - 1][j].value > 0:
             pathObject[i - 1][j].value -= 1
+
+            if pathObject[i - 1][j].value == 0:
+                pathObject[i][j].value = 0
+                return
+            
             MarkWay(i - 1, j)
+
+            if pathObject[i - 1][j].value == 0:
+                pathObject[i][j].value = 0
+                return
 
         # for left most point
         if j == 0:
             if space.E_wall == 0 and pathObject[i][j + 1].value > 0:
                 pathObject[i][j + 1].value -= 1
+
+                if pathObject[i][j + 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
                 MarkWay(i, j + 1)
+
+                if pathObject[i][j + 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
             return
         # for right most point
         if j == N - 2:
             if space.W_wall == 0 and pathObject[i][j - 1].value > 0:
                 pathObject[i][j - 1].value -= 1
+
+                if pathObject[i][j - 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
                 MarkWay(i, j - 1)
+
+                if pathObject[i][j - 1].value == 0:
+                    pathObject[i][j].value = 0
+                    return
             return
         # rest of point in middle
         if space.E_wall == 0 and pathObject[i][j + 1].value > 0:
             pathObject[i][j + 1].value -= 1
+
+            if pathObject[i][j + 1].value == 0:
+                pathObject[i][j].value = 0
+                return
+            
             MarkWay(i, j + 1)
+
+            if pathObject[i][j + 1].value == 0:
+                pathObject[i][j].value = 0
+                return
         if space.W_wall == 0 and pathObject[i][j - 1].value > 0:
             pathObject[i][j - 1].value -= 1
+
+            if pathObject[i][j - 1].value == 0:
+                pathObject[i][j].value = 0
+                return
+            
             MarkWay(i, j - 1)
+
+            if pathObject[i][j - 1].value == 0:
+                pathObject[i][j].value = 0
+                return
         return
+
+
 
 def FindWay():
     for i in range(M-1):
@@ -337,11 +393,20 @@ def FindWay():
             MarkWay(i, j)
             
 # cul-de-sacs
+"""
 DefineSapce()
 DisplayList(mazePath)
+"""
+space_val = [[0]*(N-1) for _ in range(M-1)]
 
 DefineSpaceObject()
-space_val = [[0]*(N-1) for _ in range(M-1)]
+for i in range(M-1):
+    for j in range(N-1):
+        space_val[i][j] = pathObject[i][j].value
+print('Oject path')
+DisplayList(space_val)
+
+
 
 FindWay()
 for i in range(M-1):
@@ -350,7 +415,153 @@ for i in range(M-1):
 print('Oject path')
 DisplayList(space_val)
 
+for i in range(M-1):
+    for j in range(N-1):
+        if pathObject[i][j].value == -1:
+            red_cross.append((j+0.5, i+0.5))
         
+for i in red_cross:
+    txt = '    \\node at ({},{}) {{}};\n'.format(i[0], i[1])
+    final_red_cross += txt
+
+#find path
+
+            
+
+
+            
+def MarkEntryExit():
+    for i in range(M-1):
+        for j in range(N-1):
+            #find entry point
+            space = pathObject[i][j]
+            if space.value == 2:
+                if i == 0:
+                    if not space.N_wall:
+                        space.value = -2
+                if i == M-2:
+                    if not space.S_wall:
+                        space.value = -2
+                if j == 0:
+                    if not space.W_wall:
+                        space.value = -2
+                if j == N-2:
+                    if not space.E_wall:
+                        space.value = -2
+
+MarkEntryExit()
+
+for i in range(M-1):
+    for j in range(N-1):
+        space_val[i][j] = pathObject[i][j].value
+print('Entry Exit')
+DisplayList(space_val)
+
+entryPoint = []
+
+for i in range(M-1):
+    for j in range(N-1):
+        if pathObject[i][j].value == -2:
+            entryPoint.append((j, i))
+
+def MovingDirection(i, j):
+    space = pathObject[i][j]
+    if i == 0:
+        # check for S site
+        if space.S_wall == 0 and abs(pathObject[i + 1][j].value) == 2:
+            return i + 1, j
+        
+        if j == 0:
+            if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+                return i, j+1
+            return i, j # no moving
+        if j == N - 2:
+            if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+                return i, j-1
+            return i, j # no moving
+        
+        # check for left and right
+        if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+            return i, j+1
+        
+        if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+            return i, j-1
+        return i, j # no moving
+
+    if i == M - 2:
+        # check for N site
+        if space.N_wall == 0 and abs(pathObject[i - 1][j].value) == 2:
+            return i - 1, j
+        
+        if j == 0:
+            if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+                return i, j+1
+            return i, j # no moving
+        if j == N - 2:
+            if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+                return i, j-1
+            return i, j # no moving
+        # check for left and right
+        if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+            return i, j+1
+        
+        if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+            return i, j-1
+        return i, j # no moving
+
+    # Top and below
+    if space.N_wall == 0 and abs(pathObject[i - 1][j].value) == 2:
+        return i - 1, j
+    if space.S_wall == 0 and abs(pathObject[i + 1][j].value) == 2:
+        return i + 1, j
+    # left most line
+    if j == 0:
+        if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+            return i, j+1
+        return i, j # no moving
+    # right most line
+    if j == N - 2:
+        if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+            return i, j-1
+        return i, j # no moving
+    if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+        return i, j+1
+    if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+        return i, j-1
+    return i, j # no moving
+
+allPath = []
+def YellowPath(temp, i, j):
+    a, b = MovingDirection(i, j)
+    
+    if not (a == i and b == j):
+        temp.append((b, a))
+        pathObject[a][b].value = -3
+        YellowPath(temp, a, b)
+        
+    return temp
+
+
+def FindYellowPath():
+    for i in range(M-1):
+        for j in range(N-1):
+            #find entry point
+            space = pathObject[i][j]
+            if space.value == -2:
+                tempPath = []
+                space.value = -3    #update to visited value
+                startPoint = (j, i)
+                tempPath.append((j, i))               
+                allPath.append(YellowPath(tempPath, i, j))
+    for i in allPath:
+        if len(i) > 1:
+            if i[-1] in entryPoint:
+                print('road', i)
+            continue
+        print('chekc later', i)
+
+
+FindYellowPath()
 
 content = r"""\documentclass[10pt]{{article}}
 \usepackage{{tikz}}
@@ -373,11 +584,70 @@ content = r"""\documentclass[10pt]{{article}}
 \end{{center}}
 \vspace*{{\fill}}
 
-\end{{document}}""".format(final_walls, final_Pillars,'c','d')
+\end{{document}}""".format(final_walls, final_Pillars, final_red_cross,'d')
 content = content.encode('utf-8')
 
 
-"""
+
 with open('cover2.tex','wb') as f:
     f.write(content)
+
+
+
 """
+
+
+def DefineSapce():
+    for i in range(M-1):
+        for j in range(N-1):
+            val_1 = maze[i][j]
+            val_2 = maze[i][j + 1]
+            val_3 = maze[i + 1][j]
+
+            if val_1 == '0':
+                if val_2 == '0' or val_2 == '1':
+                    if val_3 == '0' or val_3 == '2':
+                        mazePath[i][j] = 4
+                        continue
+                    if val_3 == '1' or val_3 == '3':
+                        mazePath[i][j] = 3
+                        continue
+                if val_2 == '2' or val_2 == '3':
+                    if val_3 == '0' or val_3 == '2':
+                        mazePath[i][j] = 3
+                        continue
+                    if val_3 == '1' or val_3 == '3':
+                        mazePath[i][j] = 2
+                        continue
+                    
+            if val_1 == '1' or val_1 == '2':
+                if val_2 == '0' or val_2 == '1':
+                    if val_3 == '0' or val_3 == '2':
+                        mazePath[i][j] = 3
+                        continue
+                    if val_3 == '1' or val_3 == '3':
+                        mazePath[i][j] = 2
+                        continue
+                if val_2 == '2' or val_2 == '3':
+                    if val_3 == '0' or val_3 == '2':
+                        mazePath[i][j] = 2
+                        continue
+                    if val_3 == '1' or val_3 == '3':
+                        mazePath[i][j] = 1
+                        continue
+
+            if val_1 == '3':
+                if val_2 == '0' or val_2 == '1':
+                    if val_3 == '0' or val_3 == '2':
+                        mazePath[i][j] = 2
+                        continue
+                    if val_3 == '1' or val_3 == '3':
+                        mazePath[i][j] = 1
+                        continue
+                if val_2 == '2' or val_2 == '3':
+                    if val_3 == '0' or val_3 == '2':
+                        mazePath[i][j] = 1
+                        continue
+                    if val_3 == '1' or val_3 == '3':
+                        mazePath[i][j] = 0                   
+"""  
