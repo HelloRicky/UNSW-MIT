@@ -1,11 +1,17 @@
-"""
 
-maze = [['1', '0', '2', '2', '1', '2', '3', '0'], ['3', '2', '2', '1', '2', '0', '2', '2'], ['3', '0', '1', '1', '3', '1', '0', '0'], ['2', '0', '3', '0', '0', '1', '2', '0'],
+
+maze1 = [['1', '0', '2', '2', '1', '2', '3', '0'], ['3', '2', '2', '1', '2', '0', '2', '2'], ['3', '0', '1', '1', '3', '1', '0', '0'], ['2', '0', '3', '0', '0', '1', '2', '0'],
         ['3', '2', '2', '0', '1', '2', '3', '2'], ['1', '0', '0', '1', '1', '0', '0', '0']]
-"""
-maze = [['0', '2', '2', '3', '0', '2', '1', '2', '0', '2', '2', '2'], ['2', '2', '2', '2', '2', '3', '1', '1', '1', '0', '3', '2'], ['3', '0', '1', '3', '2', '2', '1', '3', '0', '3', '0', '2'],
+
+maze2 = [['0', '2', '2', '3', '0', '2', '1', '2', '0', '2', '2', '2'], ['2', '2', '2', '2', '2', '3', '1', '1', '1', '0', '3', '2'], ['3', '0', '1', '3', '2', '2', '1', '3', '0', '3', '0', '2'],
         ['3', '1', '2', '3', '2', '2', '2', '3', '2', '3', '3', '0'], ['0', '0', '1', '0', '0', '0', '1', '0', '0', '0', '0', '0']]
 
+
+maze3 = [['3', '1', '1', '1', '1', '1', '1', '1', '1', '3', '2'], ['2', '1', '1', '2', '2', '1', '3', '1', '2', '0', '2'], ['3', '3', '0', '2', '3', '0', '2', '2', '1', '1', '2'], ['2', '0', '3', '1', '0', '2', '1', '3', '1', '2', '2'], ['3', '1', '0', '1', '1', '1', '2', '0', '2', '0', '2'], ['2', '1', '2', '3', '0', '2', '3', '0', '1', '1', '2'], ['3', '0', '2', '2', '3', '0', '3', '1', '3', '0', '2'], ['0', '3', '1', '2', '2', '1', '2', '1', '2', '1', '2'], ['2', '2', '2', '0', '3', '1', '1', '0', '3', '2', '2'],
+        ['2', '2', '1', '1', '0', '3', '1', '1', '0', '0', '2'], ['1', '1', '1', '1', '1', '1', '0', '1', '1', '1', '0']]
+
+
+maze = maze2
 
 final_walls = ""
 final_Pillars = ""
@@ -530,6 +536,285 @@ def MovingDirection(i, j):
         return i, j-1
     return i, j # no moving
 
+final_hor_set_1 = []
+final_ver_set_1 = []
+
+yellowMaze = [[0]*(N+1) for _ in range(M+1)]
+
+def DrawYellowPath(path):
+    final_hor_set = []
+    final_ver_set = []
+    print('input path', path)
+    size = len(path)
+    for i in range(size):
+        x = path[i][1] + 1        
+        y = path[i][0] + 1
+
+        # if entry or exit point
+        if i == 0:
+            if x == 1:
+                yellowMaze[x-1][y] = 1
+            if x == M - 1:
+                yellowMaze[x+1][y] = -1
+            if y == 1: 
+                yellowMaze[x][y - 1] = 2
+            if y == N - 1:
+                yellowMaze[x][y + 1] = -2
+        if i == size -1:
+            if x == 1:
+                yellowMaze[x-1][y] = -1
+            if x == M - 1:
+                yellowMaze[x+1][y] = 1
+            if y == 1: 
+                yellowMaze[x][y - 1] = -2
+            if y == N - 1:
+                yellowMaze[x][y + 1] = 2
+        if i== size - 1:
+            if y == 1: 
+                yellowMaze[x][y] = -2
+            if y == N - 1:
+                yellowMaze[x][y] = 2
+            if x == 1:
+                yellowMaze[x][y] = -1
+            if x == M - 1:
+                yellowMaze[x][y] = 1
+        # check for corners
+        if pathObject[0][0].N_wall:
+            yellowMaze[0][1] = 0
+        if pathObject[0][0].W_wall:
+            yellowMaze[1][0] = 0
+
+        if pathObject[M-2][0].S_wall:
+            yellowMaze[M][1] = 0
+        if pathObject[M-2][0].W_wall:
+            yellowMaze[M-1][0] = 0
+
+        if pathObject[0][N-2].N_wall:
+            yellowMaze[0][N-1] = 0
+        if pathObject[0][N-2].E_wall:
+            yellowMaze[1][N] = 0
+
+        if pathObject[M-2][N-2].S_wall:
+            yellowMaze[M][N-2] = 0
+        if pathObject[M-2][N-2].E_wall:
+            yellowMaze[M-1][N] = 0
+            
+            
+        if i < size - 1:
+            if x == path[i + 1][1] + 1:
+                if y > path[i+1][0] + 1:
+                    val = -2
+                else:
+                    val =2
+                yellowMaze[x][y] = val
+                continue
+            if x > path[i+1][1] + 1:
+                val = -1
+            else:
+                val = 1
+            yellowMaze[x][y] = val
+
+    print('yellowMze')
+    DisplayList(yellowMaze)
+    # store horizontal path
+    for i in range(M + 1):
+        j = 0
+        while j < N + 1:
+            if yellowMaze[i][j] == 2:
+                if j == N:
+                    final_hor_set.append([(j-1.5, i-0.5)])
+                else:
+                    final_hor_set.append([(j-0.5, i-0.5)])
+                j += 1
+                while j < N + 1 and yellowMaze[i][j] == 2:
+                    j += 1
+                final_hor_set[-1].append([j - 0.5, i - 0.5])
+            """
+            if j == 0 and yellowMaze[i][j] == -2:
+                final_hor_set.append([(j-1.5, i-0.5)])
+                j += 1
+                final_hor_set[-1].append([j - 0.5, i - 0.5])
+            
+            if j > 0 and j < N+ 1 and yellowMaze[i][j] == -2:
+                final_hor_set.append([(j-1.5, i-0.5)])
+                j += 1
+                while j < N+ 1 and yellowMaze[i][j] == -2:
+                    j += 1
+                final_hor_set[-1].append([j - 1.5, i - 0.5])
+
+                
+            """
+
+            if j < N+ 1 and yellowMaze[i][j] == -2:
+                final_hor_set.append([(j-1.5, i-0.5)])
+                if j==0:
+                    j += 1
+                    while j < N+ 1 and yellowMaze[i][j] == -2:
+                        j += 1
+                    final_hor_set[-1].append([j - 0.5, i - 0.5])
+                else:
+                    j += 1
+                    while j < N+ 1 and yellowMaze[i][j] == -2:
+                        j += 1
+                    final_hor_set[-1].append([j - 1.5, i - 0.5])
+            j += 1
+    
+    #print('final_hor_set',final_hor_set)
+    # store verticle path
+    for j in range(N + 1):
+        i = 0
+        while i < M + 1:
+            if yellowMaze[i][j] == 1:
+                
+                final_ver_set.append([(j-0.5, i - 0.5)])
+                i += 1
+                while i < M + 1 and yellowMaze[i][j] == 1:
+                    i += 1
+                final_ver_set[-1].append([j - 0.5, i - 0.5])
+
+            if i < M+ 1 and yellowMaze[i][j] == -1:
+                
+                final_ver_set.append([(j-0.5, i-1.5)])
+                i += 1
+                while i < M+ 1 and yellowMaze[i][j] == -1:
+                    i += 1
+                final_ver_set[-1].append([j - 0.5, i - 1.5])
+                
+            i += 1
+    global final_hor_set_1
+    final_hor_set_1 = final_ver_set
+    final_hor_set.extend(final_ver_set)
+    print('final_ver_set',final_ver_set)
+    final_path = ''
+    for i in final_hor_set:
+        a = i[0][0]
+        b = i[0][1]
+        c = i[1][0]
+        d = i[1][1]
+        if a < -0.5:
+            a = -0.5
+        if a > N:
+            a -= 1
+            
+        if b < -0.5:
+            b = -0.5
+        if b > M:
+            b -= 1
+            
+        if c < -0.5:
+            c = -0.5
+        if c > N:
+            c -= 1
+        
+        if d < -0.5:
+            d = -0.5
+        if d > M:
+            d -= 1
+        
+        txt = '    \draw[dashed, yellow] ({},{}) -- ({},{});\n'.format(a,b,c,d)
+        final_path += txt
+
+    print(final_path)
+    
+    """
+    for j in range(N + 1):
+        i = 0
+        while i < M + 1:
+            if yellowMaze[i][j] == 1:
+                if i < M + 1 and abs(yellowMaze[i-1][j]) == 2:
+                    i -= 1
+                final_ver_set.append([(j-0.5, i-0.5)])
+                i += 1
+                while i < M + 1 and yellowMaze[i][j] == 1:
+                    i += 1
+                if i < M + 1 and (yellowMaze[i][j] == 0 or abs(yellowMaze[i - 2][j]) == 2):
+                    i -= 1
+                # 1 at last row
+                if i == M + 1 and yellowMaze[i-1][j] == 1:
+                    i -= 1
+                final_ver_set[-1].append([j - 0.5, i - 0.5])
+                
+            i += 1
+    
+    print('final_ver_set',final_ver_set)
+    """
+        
+"""
+def DrawYellowPath(path):
+    hor_set = []
+    ver_set = []
+    if len(path) > 1:
+        
+        # for horizontal lines
+        pre_hor = path[0][0]
+        pre_ver = path[0][1]
+        hor_gap = 0
+        
+        for i in path:
+            hor_now = i[0]
+            ver_now = i[1]               
+            if pre_ver == ver_now and pre_hor != hor_now:
+                if hor_gap == 0:
+                    hor_set.append([(pre_hor + 0.5, pre_ver + 0.5)])
+                hor_gap = (hor_now - pre_hor)
+                if i != path[-1]:
+                    continue
+            pre_ver = ver_now
+            pre_hor = hor_now
+            if hor_gap != 0:
+                y = hor_set[-1][0][0]
+                x = hor_set[-1][0][1]
+                hor_set[-1].append((y + hor_gap,x))
+            hor_gap = 0
+
+        # for vertical lines
+        pre_hor = path[0][0]
+        pre_ver = path[0][1]
+        ver_gap = 0
+        
+        for i in path:
+            hor_now = i[0]
+            ver_now = i[1]               
+            if pre_ver != ver_now and pre_hor == hor_now:
+                if ver_gap == 0:
+                    ver_set.append([(pre_hor + 0.5, pre_ver + 0.5)])
+                ver_gap = (ver_now - pre_ver)
+                if i != path[-1]:
+                    continue
+            pre_ver = ver_now
+            pre_hor = hor_now
+            if ver_gap != 0:
+                y = ver_set[-1][0][0]
+                x = ver_set[-1][0][1]
+                check_x = x+ver_gap
+                ver_set[-1].append((y,x+ver_gap))
+            ver_gap = 0
+
+        # add entry length and exit lenth
+        print('H:', hor_set)
+        print('V:', ver_set)
+
+        if hor_set:
+            for i in hor_set:
+                
+                print('print',i)
+
+        if ver_set:
+            ver_size = len(ver_set)
+            for i in range(ver_size):
+                start_point = ver_set[i][0]
+                end_point = ver_set[i][1]
+                if start_point[1] == 0.5:
+                    print(ver_set[i][0][1])
+                    ver_set[i][0][1] = -0.5
+                if end_point[1] == M - 1.5:
+                    ver_set[i][1][1] += 1
+                    
+                print('print',i)
+"""        
+
+        
+
 allPath = []
 def YellowPath(temp, i, j):
     a, b = MovingDirection(i, j)
@@ -556,9 +841,29 @@ def FindYellowPath():
     for i in allPath:
         if len(i) > 1:
             if i[-1] in entryPoint:
-                print('road', i)
+                #print('road', i)
+                DrawYellowPath(i)
             continue
-        print('chekc later', i)
+        # check for corner points
+        x = i[0][1]
+        y = i[0][0]
+        space = pathObject[x][y]
+        if x == 0 and y == 0:
+            if space.N_wall == 0 and space.W_wall == 0:
+                DrawYellowPath(i)
+            continue
+        if x == 0 and y == N - 2:
+            if space.N_wall == 0 and space.E_wall == 0:
+                DrawYellowPath(i)
+            continue
+        if x == M - 2 and y == 0:
+            if space.S_wall == 0 and space.W_wall == 0:
+                DrawYellowPath(i)
+            continue
+        if x == M - 2 and y == N - 2:
+            if space.S_wall == 0 and space.E_wall == 0:
+                DrawYellowPath(i)
+        
 
 
 FindYellowPath()
