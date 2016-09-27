@@ -1,5 +1,10 @@
 import os
 import sys
+import copy
+
+if __name__ == "__main__":
+    #sys.argv = ['maze.py', '-print', '--file', 'maze1.txt']
+    sys.argv = ['maze.py', '--file', 'maze1.txt']
 
 
 """
@@ -20,11 +25,29 @@ maze_height_max = 41
 N = 0   # row length of maze
 M = 0   # col length of maze
 
+hor_lines = []
+ver_lines = []
+pillars = []
+red_cross = []
+
+
+
+final_walls = ""
+final_Pillars = ""
+final_red_cross = ""
+final_path = ""
+
+
 pathObject = []
 entryPoint = []
 final_path_set = []
 allPath = []
 yellowMaze =[]
+
+# question 1
+gates = 0
+wallSet = 0
+
 
 """
 Class and Functions
@@ -639,31 +662,14 @@ def FindEndPoint_ver(j, i):
     return FindEndPoint_ver(j + 1, i)
 
 
+
+
 """
 Generate output
 -----------------------------
 """
 
-def GenerateText():
-    print('here is GenerateText')
-    print(maze)
-    
-def GeneratePdf():
-    print('here is GeneratePdf')
-
-    hor_lines = []
-    ver_lines = []
-    pillars = []
-    red_cross = []
-    
-    
-    
-    final_walls = ""
-    final_Pillars = ""
-    final_red_cross = ""
-    final_path = ""
-
-    
+def General():
     """
     wall Section
     ---------------------------------------------------------------------
@@ -697,11 +703,13 @@ def GeneratePdf():
     
     # combine all walls
     hor_lines.extend(ver_lines)
-
+    global final_walls
     for i in hor_lines:
         txt = '    \draw ({},{}) -- ({},{});\n'.format(i[0][0], i[0][1], i[1][0], i[1][1])
         final_walls += txt
 
+
+    
     """
     pillars Section
     ---------------------------------------------------------------------
@@ -734,7 +742,8 @@ def GeneratePdf():
                 left_val = maze[i][j-1]
                 if (top_val == '0' or top_val == '1') and (left_val == '0' or left_val == '2'):
                     pillars.append((j, i))
-                    
+
+    global final_Pillars       
     for i in pillars:
         txt = '    \\fill[green] ({},{}) circle(0.2);\n'.format(i[0], i[1])
         final_Pillars += txt
@@ -759,6 +768,8 @@ def GeneratePdf():
         showList.append(tempList)
     DisplayList(showList)
     print(maze)
+
+    global final_red_cross
     for i in red_cross:
         txt = '    \\node at ({},{}) {{}};\n'.format(i[0], i[1])
         final_red_cross += txt
@@ -779,6 +790,8 @@ def GeneratePdf():
                 entryPoint.append((j, i))
     FindYellowPath()
 
+
+    global final_path
     for i in final_path_set:
         a = i[0][0]
         b = i[0][1]
@@ -806,6 +819,87 @@ def GeneratePdf():
         
         txt = '    \draw[dashed, yellow] ({},{}) -- ({},{});\n'.format(a,b,c,d)
         final_path += txt
+
+    """
+    find numbers of gates
+    ---------------------------------------------------------------------
+    """
+    global gates
+    
+    for i in range(M - 1):
+        for j in range(N - 1):
+            space = pathObject[i][j]
+            if i == 0 and space.N_wall == 0:
+                gates += 1
+            if i == M - 2 and space.S_wall == 0:
+                gates += 1
+            if j == 0 and space.W_wall == 0:
+                gates += 1
+            if j == N - 2 and space.E_wall == 0:
+                gates += 1
+                
+    """
+    find connected wall
+    ---------------------------------------------------------------------
+    """
+    
+    # make a copy of the maze
+    print()
+    wallMaze = copy.deepcopy(maze)
+
+    def SeekWall(i, j):
+        val = wallMaze[i][j]
+        if val == '0':
+            if j - 1 >= 0 and (wallMaze[i][j -1] == '1' or wallMaze[i][j - 1] == '3'):
+                while j >= 0:
+                    SeekWall(i, j - 1)
+                    j -= 1
+            return
+        if val == '1':
+            wallMaze[i][j] = '0'
+            if j + 1 < N:
+                while j < N:
+                    SeekWall(i, j + 1)
+                    j += 1
+            return
+        if val == '2':
+            wallMaze[i][j] = '0'
+            if i + 1 < M:
+                SeekWall(i + 1, j)
+            return
+        if val == '3':
+            wallMaze[i][j] = '0'
+            if j + 1 < N:
+                SeekWall(i, j + 1)
+            if i + 1 < M:
+                SeekWall(i + 1, j)
+            return
+
+    count = 0
+    for i in range(M):
+        for j in range(N):
+            if wallMaze[i][j] != '0':                
+                SeekWall(i, j)
+                count += 1
+    print('wall count', count)     
+    
+def GenerateText():
+    print('here is GenerateText')
+
+    if not gates:
+        print('The maze has no gate.')
+    elif gates == 1:
+        print('The maze has a single gate.')
+    else:
+        print('The maze has {} gates.'.format(gates))
+    
+def GeneratePdf():
+    print('here is GeneratePdf')
+
+    
+
+    
+    
     
 
     """
@@ -872,13 +966,16 @@ while True:
             raise ValueError
         
         # check for parameters_3: with or without 'print'
+        
         if in_len == 3:
+            General()
             GenerateText()
             break
         
         if in_len == 4:
             if _print != '-print':
-                    raise ValueError
+                raise ValueError
+            General()
             GeneratePdf()
             break
     except ValueError:
@@ -886,5 +983,6 @@ while True:
         sys.exit()
     
         
+
     
 
