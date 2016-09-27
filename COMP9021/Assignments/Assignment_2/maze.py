@@ -21,6 +21,10 @@ N = 0   # row length of maze
 M = 0   # col length of maze
 
 pathObject = []
+entryPoint = []
+final_path_set = []
+allPath = []
+yellowMaze =[]
 
 """
 Class and Functions
@@ -356,6 +360,270 @@ def MarkWay(i, j):
         return
 
 """
+Yellow path
+
+"""
+def MarkEntryExit():
+    for i in range(M-1):
+        for j in range(N-1):
+            #find entry point
+            space = pathObject[i][j]
+            if space.value == 2:
+                if i == 0:
+                    if not space.N_wall:
+                        space.value = -2
+                if i == M-2:
+                    if not space.S_wall:
+                        space.value = -2
+                if j == 0:
+                    if not space.W_wall:
+                        space.value = -2
+                if j == N-2:
+                    if not space.E_wall:
+                        space.value = -2
+
+def MovingDirection(i, j):
+    space = pathObject[i][j]
+    if i == 0:
+        # check for S site
+        if space.S_wall == 0 and abs(pathObject[i + 1][j].value) == 2:
+            return i + 1, j
+        
+        if j == 0:
+            if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+                return i, j+1
+            return i, j # no moving
+        if j == N - 2:
+            if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+                return i, j-1
+            return i, j # no moving
+        
+        # check for left and right
+        if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+            return i, j+1
+        
+        if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+            return i, j-1
+        return i, j # no moving
+
+    if i == M - 2:
+        # check for N site
+        if space.N_wall == 0 and abs(pathObject[i - 1][j].value) == 2:
+            return i - 1, j
+        
+        if j == 0:
+            if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+                return i, j+1
+            return i, j # no moving
+        if j == N - 2:
+            if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+                return i, j-1
+            return i, j # no moving
+        # check for left and right
+        if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+            return i, j+1
+        
+        if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+            return i, j-1
+        return i, j # no moving
+
+    # Top and below
+    if space.N_wall == 0 and abs(pathObject[i - 1][j].value) == 2:
+        return i - 1, j
+    if space.S_wall == 0 and abs(pathObject[i + 1][j].value) == 2:
+        return i + 1, j
+    # left most line
+    if j == 0:
+        if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+            return i, j+1
+        return i, j # no moving
+    # right most line
+    if j == N - 2:
+        if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+            return i, j-1
+        return i, j # no moving
+    if space.E_wall == 0 and abs(pathObject[i][j + 1].value) == 2:
+        return i, j+1
+    if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
+        return i, j-1
+    return i, j # no moving
+
+def DrawYellowPath(path):
+    final_hor_set = []
+    final_ver_set = []
+    print('input path', path)
+    size = len(path)
+    for i in range(size):
+        x = path[i][1] + 1        
+        y = path[i][0] + 1
+
+        # if entry or exit point
+        if i == 0:
+            if x == 1:
+                yellowMaze[x-1][y] = 1
+            if x == M - 1:
+                yellowMaze[x+1][y] = -1
+            if y == 1: 
+                yellowMaze[x][y - 1] = 2
+            if y == N - 1:
+                yellowMaze[x][y + 1] = -2
+        if i == size -1:
+            if x == 1:
+                yellowMaze[x-1][y] = -1
+            if x == M - 1:
+                yellowMaze[x+1][y] = 1
+            if y == 1: 
+                yellowMaze[x][y - 1] = -2
+            if y == N - 1:
+                yellowMaze[x][y + 1] = 2
+        if i== size - 1:
+            if y == 1: 
+                yellowMaze[x][y] = -2
+            if y == N - 1:
+                yellowMaze[x][y] = 2
+            if x == 1:
+                yellowMaze[x][y] = -1
+            if x == M - 1:
+                yellowMaze[x][y] = 1
+        # check for corners
+        if pathObject[0][0].N_wall:
+            yellowMaze[0][1] = 0
+        if pathObject[0][0].W_wall:
+            yellowMaze[1][0] = 0
+
+        if pathObject[M-2][0].S_wall:
+            yellowMaze[M][1] = 0
+        if pathObject[M-2][0].W_wall:
+            yellowMaze[M-1][0] = 0
+
+        if pathObject[0][N-2].N_wall:
+            yellowMaze[0][N-1] = 0
+        if pathObject[0][N-2].E_wall:
+            yellowMaze[1][N] = 0
+
+        if pathObject[M-2][N-2].S_wall:
+            yellowMaze[M][N-2] = 0
+        if pathObject[M-2][N-2].E_wall:
+            yellowMaze[M-1][N] = 0
+            
+            
+        if i < size - 1:
+            if x == path[i + 1][1] + 1:
+                if y > path[i+1][0] + 1:
+                    val = -2
+                else:
+                    val =2
+                yellowMaze[x][y] = val
+                continue
+            if x > path[i+1][1] + 1:
+                val = -1
+            else:
+                val = 1
+            yellowMaze[x][y] = val
+
+    # store horizontal path
+    for i in range(M + 1):
+        j = 0
+        while j < N + 1:
+            if yellowMaze[i][j] == 2:
+                if j == N:
+                    final_hor_set.append([(j-1.5, i-0.5)])
+                else:
+                    final_hor_set.append([(j-0.5, i-0.5)])
+                j += 1
+                while j < N + 1 and yellowMaze[i][j] == 2:
+                    j += 1
+                final_hor_set[-1].append([j - 0.5, i - 0.5])
+
+            if j < N+ 1 and yellowMaze[i][j] == -2:
+                final_hor_set.append([(j-1.5, i-0.5)])
+                if j==0:
+                    j += 1
+                    while j < N+ 1 and yellowMaze[i][j] == -2:
+                        j += 1
+                    final_hor_set[-1].append([j - 0.5, i - 0.5])
+                else:
+                    j += 1
+                    while j < N+ 1 and yellowMaze[i][j] == -2:
+                        j += 1
+                    final_hor_set[-1].append([j - 1.5, i - 0.5])
+            j += 1
+
+    #print('final_hor_set',final_hor_set)
+    # store verticle path
+    for j in range(N + 1):
+        i = 0
+        while i < M + 1:
+            if yellowMaze[i][j] == 1:
+                
+                final_ver_set.append([(j-0.5, i - 0.5)])
+                i += 1
+                while i < M + 1 and yellowMaze[i][j] == 1:
+                    i += 1
+                final_ver_set[-1].append([j - 0.5, i - 0.5])
+
+            if i < M+ 1 and yellowMaze[i][j] == -1:
+                
+                final_ver_set.append([(j-0.5, i-1.5)])
+                i += 1
+                while i < M+ 1 and yellowMaze[i][j] == -1:
+                    i += 1
+                final_ver_set[-1].append([j - 0.5, i - 1.5])
+                
+            i += 1
+    global final_path_set
+    final_hor_set_1 = final_ver_set
+    final_hor_set.extend(final_ver_set)
+    final_path_set = final_hor_set
+
+def YellowPath(temp, i, j):
+    a, b = MovingDirection(i, j)
+    
+    if not (a == i and b == j):
+        temp.append((b, a))
+        pathObject[a][b].value = -3
+        YellowPath(temp, a, b)
+        
+    return temp
+
+def FindYellowPath():
+    for i in range(M-1):
+        for j in range(N-1):
+            #find entry point
+            space = pathObject[i][j]
+            if space.value == -2:
+                tempPath = []
+                space.value = -3    #update to visited value
+                startPoint = (j, i)
+                tempPath.append((j, i))               
+                allPath.append(YellowPath(tempPath, i, j))
+    for i in allPath:
+        if len(i) > 1:
+            if i[-1] in entryPoint:
+                #print('road', i)
+                DrawYellowPath(i)
+            continue
+        # check for corner points
+        x = i[0][1]
+        y = i[0][0]
+        space = pathObject[x][y]
+        if x == 0 and y == 0:
+            if space.N_wall == 0 and space.W_wall == 0:
+                DrawYellowPath(i)
+            continue
+        if x == 0 and y == N - 2:
+            if space.N_wall == 0 and space.E_wall == 0:
+                DrawYellowPath(i)
+            continue
+        if x == M - 2 and y == 0:
+            if space.S_wall == 0 and space.W_wall == 0:
+                DrawYellowPath(i)
+            continue
+        if x == M - 2 and y == N - 2:
+            if space.S_wall == 0 and space.E_wall == 0:
+                DrawYellowPath(i)
+
+"""
 build walls
 """
 def FindEndPoint_hor(i, j):
@@ -387,11 +655,14 @@ def GeneratePdf():
     ver_lines = []
     pillars = []
     red_cross = []
-
+    
+    
+    
     final_walls = ""
     final_Pillars = ""
     final_red_cross = ""
     final_path = ""
+
     
     """
     wall Section
@@ -496,6 +767,46 @@ def GeneratePdf():
     entry-exit path
     ---------------------------------------------------------------------
     """
+    global yellowMaze
+    yellowMaze =[[0]*(N+1) for _ in range(M+1)]
+    
+    
+    MarkEntryExit()
+
+    for i in range(M-1):
+        for j in range(N-1):
+            if pathObject[i][j].value == -2:
+                entryPoint.append((j, i))
+    FindYellowPath()
+
+    for i in final_path_set:
+        a = i[0][0]
+        b = i[0][1]
+        c = i[1][0]
+        d = i[1][1]
+        if a < -0.5:
+            a = -0.5
+        if a > N:
+            a -= 1
+            
+        if b < -0.5:
+            b = -0.5
+        if b > M:
+            b -= 1
+            
+        if c < -0.5:
+            c = -0.5
+        if c > N:
+            c -= 1
+        
+        if d < -0.5:
+            d = -0.5
+        if d > M:
+            d -= 1
+        
+        txt = '    \draw[dashed, yellow] ({},{}) -- ({},{});\n'.format(a,b,c,d)
+        final_path += txt
+    
 
     """
     write to tex file
@@ -517,12 +828,12 @@ def GeneratePdf():
 {0}% Pillars
 {1}% Inner points in accessible cul-de-sacs
 {2}% Entry-exit paths without intersections
-{3}
-\end{{tikzpicture}}
+{3}\end{{tikzpicture}}
 \end{{center}}
 \vspace*{{\fill}}
 
-\end{{document}}""".format(final_walls, final_Pillars, final_red_cross,'d')
+\end{{document}}
+""".format(final_walls, final_Pillars, final_red_cross, final_path)
     content = content.encode('utf-8')
 
 

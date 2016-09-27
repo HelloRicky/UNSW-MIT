@@ -1,29 +1,31 @@
+import os
+import sys
 
 
-maze1 = [['1', '0', '2', '2', '1', '2', '3', '0'], ['3', '2', '2', '1', '2', '0', '2', '2'], ['3', '0', '1', '1', '3', '1', '0', '0'], ['2', '0', '3', '0', '0', '1', '2', '0'],
-        ['3', '2', '2', '0', '1', '2', '3', '2'], ['1', '0', '0', '1', '1', '0', '0', '0']]
+"""
+initialisation
+-----------------------------
+"""
 
-maze2 = [['0', '2', '2', '3', '0', '2', '1', '2', '0', '2', '2', '2'], ['2', '2', '2', '2', '2', '3', '1', '1', '1', '0', '3', '2'], ['3', '0', '1', '3', '2', '2', '1', '3', '0', '3', '0', '2'],
-        ['3', '1', '2', '3', '2', '2', '2', '3', '2', '3', '3', '0'], ['0', '0', '1', '0', '0', '0', '1', '0', '0', '0', '0', '0']]
+errMsg_1 = "I expect --file followed by filename and possibly -print as command line arguments."
+errMsg_2 = "Incorrect input."
 
+maze = []
+maze_set = {'0', '1', '2', '3'}
 
-maze3 = [['3', '1', '1', '1', '1', '1', '1', '1', '1', '3', '2'], ['2', '1', '1', '2', '2', '1', '3', '1', '2', '0', '2'], ['3', '3', '0', '2', '3', '0', '2', '2', '1', '1', '2'], ['2', '0', '3', '1', '0', '2', '1', '3', '1', '2', '2'], ['3', '1', '0', '1', '1', '1', '2', '0', '2', '0', '2'], ['2', '1', '2', '3', '0', '2', '3', '0', '1', '1', '2'], ['3', '0', '2', '2', '3', '0', '3', '1', '3', '0', '2'], ['0', '3', '1', '2', '2', '1', '2', '1', '2', '1', '2'], ['2', '2', '2', '0', '3', '1', '1', '0', '3', '2', '2'],
-        ['2', '2', '1', '1', '0', '3', '1', '1', '0', '0', '2'], ['1', '1', '1', '1', '1', '1', '0', '1', '1', '1', '0']]
+maze_dim_min = 2
+maze_width_max = 31
+maze_height_max = 41
 
+N = 0   # row length of maze
+M = 0   # col length of maze
 
-maze = maze2
+pathObject = []
 
-final_walls = ""
-final_Pillars = ""
-final_red_cross = ""
-final_path = ""
-
-N = len(maze[0])    # row length
-M = len(maze)       # col length
-hor_lines = []
-ver_lines = []
-pillars = []
-red_cross = []
+"""
+Class and Functions
+-----------------------------
+"""
 
 class space:
     def __init__(self, value = 0, N_wall = 0, S_wall = 0, W_wall = 0, E_wall = 0):
@@ -33,14 +35,74 @@ class space:
         self.W_wall = W_wall
         self.E_wall = E_wall
 
-#mazePath = [[0]*(N-1) for _ in range(M - 1)]
+def DisplayList(a):
+    for row in a:
+        for col in row:
+            print(col, end = ' ')
+        print()
 
-pathObject = []
-for i in range(M-1):
-    temp = []
-    for j in range(N-1):
-        temp.append(space())
-    pathObject.append(temp)
+def Check_file_content(f_Name):
+	
+    maze_collect = set()		# set to collect unique number of current file
+
+    with open(f_Name, 'r') as f:
+        # read each row
+        for lines in f:
+		
+            row_list = []		# empty list to store new all digit in new row
+            
+            # read each char per row
+            for d in lines.strip():
+                # filter space and store value to list
+                if d != ' ':
+                    row_list.append(d)
+            
+            # filter empty rows
+            if row_list:
+                # collect and combine all unique char
+                maze_collect = maze_collect.union(row_list)
+                # check if collection is the sub set of the defined char set
+                if not (maze_collect <= maze_set):
+                    print('out of set range')
+                    return False
+                
+                # check for width of each row
+                if not (len(row_list) >= maze_dim_min and len(row_list) <= maze_width_max):
+                    print('row size issue')
+                    return False
+                
+                # check for last digit on each line
+                if row_list[-1] == '1' or row_list[-1] == '3':
+                    print('last digit issue, 1 or 3')
+                    return False
+
+                maze.append(row_list)		# record all suitable char to global list maze
+                            
+	# check for height of entire maze
+        if not (len(maze) >= maze_dim_min and len(maze) <= maze_height_max):
+            print('col size issue')
+            return False
+        # check for last digits of last line
+        if maze[-1][-1] == '2':
+            print('last line digit issue, 2')
+            return False
+        print('All good')
+        DisplayList(maze)
+        
+        # assign dim to global variable and create object
+        global N, M
+        N = len(maze[0])
+        M = len(maze)
+        print('M', M, N)
+        CreateSpaceMatrix()
+        return True
+
+def CreateSpaceMatrix():
+    for i in range(M-1):
+        temp = []
+        for j in range(N-1):
+            temp.append(space())
+        pathObject.append(temp)
 
 """ find how many access to the space
 0 to toal clock space
@@ -48,14 +110,6 @@ for i in range(M-1):
 4 to max access
 """
 
-def DisplayList(a):
-    for row in a:
-        for col in row:
-            print(col, end = ' ')
-        print()
-
-
-        
 def DefineSpaceObject():
     for i in range(M-1):
         for j in range(N-1):
@@ -105,7 +159,7 @@ def DefineSpaceObject():
                         pathObject[i][j].E_wall = 1
                         continue
 
-            if val_1 == '1' or val_1 == '2':
+            if val_1 == '1' or val_1 == '2':        #can be removed
                 if val_1 == '1':
                     pathObject[i][j].N_wall = 1
                 else:
@@ -127,98 +181,8 @@ def DefineSpaceObject():
                         pathObject[i][j].value = 1
                         pathObject[i][j].S_wall = 1
                         pathObject[i][j].E_wall = 1
-                 
-
-              
-               
-
-"""
-build walls
-"""
-def FindEndPoint_hor(i, j):
-    val = maze[i][j]
-    if val == '0' or val == '2':
-        return j
-    return FindEndPoint_hor(i, j + 1)
-
-def FindEndPoint_ver(j, i):
-    val = maze[j][i]
-    if val == '0' or val == '1':
-        return j
-    return FindEndPoint_ver(j + 1, i)
-
-# for all horizontal lines
-for i in range(M):
-    j = 0
-    while j < N:
-        
-        val = maze[i][j]
-        if val != '0' and val != '2':
-            start_point = (j, i)
-            j = FindEndPoint_hor(i, j+1)
-            end_point = (j, i)            
-            hor_lines.append([start_point,end_point])
-        j += 1
-
-# for all vertical lines
-for i in range(N):
-    j = 0
-    while j < M:
-        
-        val = maze[j][i]
-        if val != '0' and val != '1':
-            start_point = (i, j)
-            j = FindEndPoint_ver(j+1, i)
-            end_point = (i, j)            
-            ver_lines.append([start_point,end_point])
-        j += 1
-
-hor_lines.extend(ver_lines)
-
-for i in hor_lines:
-    txt = '    \draw ({},{}) -- ({},{});\n'.format(i[0][0], i[0][1], i[1][0], i[1][1])
-    final_walls += txt
-       
-"""
- generate pillars
-"""
-for i in range(M):
-    for j in range(N):
-        val = maze[i][j]
-        # only work for value '0'
-        if val == '0':
-            # check for first row
-            if i == 0:
-                #top left point
-                if j == 0:
-                    pillars.append((j, i))
-                    continue
-                # check left point if equal to 0 or 2
-                left_val = maze[i][j-1]
-                if left_val == '0' or left_val == '2':
-                    pillars.append((j, i))
-                    continue
-            # check for first item below first low
-            top_val = maze[i - 1][j]
-            if j == 0:
-                # check for one point above
-                if top_val == '0' or top_val == '1':
-                    pillars.append((j, i))
-                    continue
-            # check for rest point
-            left_val = maze[i][j-1]
-            if (top_val == '0' or top_val == '1') and (left_val == '0' or left_val == '2'):
-                pillars.append((j, i))
-
-for i in pillars:
-    txt = '    \\fill[green] ({},{}) circle(0.2);\n'.format(i[0], i[1])
-    final_Pillars += txt
-                
-
-
-# copy mazePath without reference
-#cul_de_sacs = deepcopy(mazePath)
-    
+                        
+#cul_de_sacs
 
 def MarkWay(i, j):
     space = pathObject[i][j]
@@ -391,51 +355,10 @@ def MarkWay(i, j):
                 return
         return
 
-
-
-def FindWay():
-    for i in range(M-1):
-        for j in range(N-1):
-            MarkWay(i, j)
-            
-# cul-de-sacs
 """
-DefineSapce()
-DisplayList(mazePath)
+Yellow path
+
 """
-space_val = [[0]*(N-1) for _ in range(M-1)]
-
-DefineSpaceObject()
-for i in range(M-1):
-    for j in range(N-1):
-        space_val[i][j] = pathObject[i][j].value
-print('Oject path')
-DisplayList(space_val)
-
-
-
-FindWay()
-for i in range(M-1):
-    for j in range(N-1):
-        space_val[i][j] = pathObject[i][j].value
-print('Oject path')
-DisplayList(space_val)
-
-for i in range(M-1):
-    for j in range(N-1):
-        if pathObject[i][j].value == -1:
-            red_cross.append((j+0.5, i+0.5))
-        
-for i in red_cross:
-    txt = '    \\node at ({},{}) {{}};\n'.format(i[0], i[1])
-    final_red_cross += txt
-
-#find path
-
-            
-
-
-            
 def MarkEntryExit():
     for i in range(M-1):
         for j in range(N-1):
@@ -454,21 +377,6 @@ def MarkEntryExit():
                 if j == N-2:
                     if not space.E_wall:
                         space.value = -2
-
-MarkEntryExit()
-
-for i in range(M-1):
-    for j in range(N-1):
-        space_val[i][j] = pathObject[i][j].value
-print('Entry Exit')
-DisplayList(space_val)
-
-entryPoint = []
-
-for i in range(M-1):
-    for j in range(N-1):
-        if pathObject[i][j].value == -2:
-            entryPoint.append((j, i))
 
 def MovingDirection(i, j):
     space = pathObject[i][j]
@@ -535,10 +443,6 @@ def MovingDirection(i, j):
     if space.W_wall == 0 and abs(pathObject[i][j - 1].value) == 2:
         return i, j-1
     return i, j # no moving
-
-final_path_set = []
-
-yellowMaze = [[0]*(N+1) for _ in range(M+1)]
 
 def DrawYellowPath(path):
     final_hor_set = []
@@ -613,8 +517,6 @@ def DrawYellowPath(path):
                 val = 1
             yellowMaze[x][y] = val
 
-    print('yellowMze')
-    DisplayList(yellowMaze)
     # store horizontal path
     for i in range(M + 1):
         j = 0
@@ -628,21 +530,6 @@ def DrawYellowPath(path):
                 while j < N + 1 and yellowMaze[i][j] == 2:
                     j += 1
                 final_hor_set[-1].append([j - 0.5, i - 0.5])
-            """
-            if j == 0 and yellowMaze[i][j] == -2:
-                final_hor_set.append([(j-1.5, i-0.5)])
-                j += 1
-                final_hor_set[-1].append([j - 0.5, i - 0.5])
-            
-            if j > 0 and j < N+ 1 and yellowMaze[i][j] == -2:
-                final_hor_set.append([(j-1.5, i-0.5)])
-                j += 1
-                while j < N+ 1 and yellowMaze[i][j] == -2:
-                    j += 1
-                final_hor_set[-1].append([j - 1.5, i - 0.5])
-
-                
-            """
 
             if j < N+ 1 and yellowMaze[i][j] == -2:
                 final_hor_set.append([(j-1.5, i-0.5)])
@@ -657,7 +544,7 @@ def DrawYellowPath(path):
                         j += 1
                     final_hor_set[-1].append([j - 1.5, i - 0.5])
             j += 1
-    
+
     #print('final_hor_set',final_hor_set)
     # store verticle path
     for j in range(N + 1):
@@ -684,108 +571,7 @@ def DrawYellowPath(path):
     final_hor_set_1 = final_ver_set
     final_hor_set.extend(final_ver_set)
     final_path_set = final_hor_set
-    
-    
-    """
-    for j in range(N + 1):
-        i = 0
-        while i < M + 1:
-            if yellowMaze[i][j] == 1:
-                if i < M + 1 and abs(yellowMaze[i-1][j]) == 2:
-                    i -= 1
-                final_ver_set.append([(j-0.5, i-0.5)])
-                i += 1
-                while i < M + 1 and yellowMaze[i][j] == 1:
-                    i += 1
-                if i < M + 1 and (yellowMaze[i][j] == 0 or abs(yellowMaze[i - 2][j]) == 2):
-                    i -= 1
-                # 1 at last row
-                if i == M + 1 and yellowMaze[i-1][j] == 1:
-                    i -= 1
-                final_ver_set[-1].append([j - 0.5, i - 0.5])
-                
-            i += 1
-    
-    print('final_ver_set',final_ver_set)
-    """
-        
-"""
-def DrawYellowPath(path):
-    hor_set = []
-    ver_set = []
-    if len(path) > 1:
-        
-        # for horizontal lines
-        pre_hor = path[0][0]
-        pre_ver = path[0][1]
-        hor_gap = 0
-        
-        for i in path:
-            hor_now = i[0]
-            ver_now = i[1]               
-            if pre_ver == ver_now and pre_hor != hor_now:
-                if hor_gap == 0:
-                    hor_set.append([(pre_hor + 0.5, pre_ver + 0.5)])
-                hor_gap = (hor_now - pre_hor)
-                if i != path[-1]:
-                    continue
-            pre_ver = ver_now
-            pre_hor = hor_now
-            if hor_gap != 0:
-                y = hor_set[-1][0][0]
-                x = hor_set[-1][0][1]
-                hor_set[-1].append((y + hor_gap,x))
-            hor_gap = 0
 
-        # for vertical lines
-        pre_hor = path[0][0]
-        pre_ver = path[0][1]
-        ver_gap = 0
-        
-        for i in path:
-            hor_now = i[0]
-            ver_now = i[1]               
-            if pre_ver != ver_now and pre_hor == hor_now:
-                if ver_gap == 0:
-                    ver_set.append([(pre_hor + 0.5, pre_ver + 0.5)])
-                ver_gap = (ver_now - pre_ver)
-                if i != path[-1]:
-                    continue
-            pre_ver = ver_now
-            pre_hor = hor_now
-            if ver_gap != 0:
-                y = ver_set[-1][0][0]
-                x = ver_set[-1][0][1]
-                check_x = x+ver_gap
-                ver_set[-1].append((y,x+ver_gap))
-            ver_gap = 0
-
-        # add entry length and exit lenth
-        print('H:', hor_set)
-        print('V:', ver_set)
-
-        if hor_set:
-            for i in hor_set:
-                
-                print('print',i)
-
-        if ver_set:
-            ver_size = len(ver_set)
-            for i in range(ver_size):
-                start_point = ver_set[i][0]
-                end_point = ver_set[i][1]
-                if start_point[1] == 0.5:
-                    print(ver_set[i][0][1])
-                    ver_set[i][0][1] = -0.5
-                if end_point[1] == M - 1.5:
-                    ver_set[i][1][1] += 1
-                    
-                print('print',i)
-"""        
-
-        
-
-allPath = []
 def YellowPath(temp, i, j):
     a, b = MovingDirection(i, j)
     
@@ -795,7 +581,6 @@ def YellowPath(temp, i, j):
         YellowPath(temp, a, b)
         
     return temp
-
 
 def FindYellowPath():
     for i in range(M-1):
@@ -833,41 +618,196 @@ def FindYellowPath():
         if x == M - 2 and y == N - 2:
             if space.S_wall == 0 and space.E_wall == 0:
                 DrawYellowPath(i)
-        
+
+"""
+build walls
+"""
+def FindEndPoint_hor(i, j):
+    val = maze[i][j]
+    if val == '0' or val == '2':
+        return j
+    return FindEndPoint_hor(i, j + 1)
+
+def FindEndPoint_ver(j, i):
+    val = maze[j][i]
+    if val == '0' or val == '1':
+        return j
+    return FindEndPoint_ver(j + 1, i)
 
 
-FindYellowPath()
+"""
+Generate output
+-----------------------------
+"""
 
-for i in final_path_set:
-    a = i[0][0]
-    b = i[0][1]
-    c = i[1][0]
-    d = i[1][1]
-    if a < -0.5:
-        a = -0.5
-    if a > N:
-        a -= 1
-        
-    if b < -0.5:
-        b = -0.5
-    if b > M:
-        b -= 1
-        
-    if c < -0.5:
-        c = -0.5
-    if c > N:
-        c -= 1
+def GenerateText():
+    print('here is GenerateText')
+    print(maze)
     
-    if d < -0.5:
-        d = -0.5
-    if d > M:
-        d -= 1
+def GeneratePdf():
+    print('here is GeneratePdf')
+
+    hor_lines = []
+    ver_lines = []
+    pillars = []
+    red_cross = []
     
-    txt = '    \draw[dashed, yellow] ({},{}) -- ({},{});\n'.format(a,b,c,d)
-    final_path += txt
+    entryPoint = []
+    final_path_set = []
+    allPath = []
+    
+    final_walls = ""
+    final_Pillars = ""
+    final_red_cross = ""
+    final_path = ""
 
+    yellowMaze = [[0]*(N+1) for _ in range(M+1)]
+    
+    """
+    wall Section
+    ---------------------------------------------------------------------
+    """
+    # horizontal wall
+    for i in range(M):
+        j = 0
+        while j < N:
+            
+            val = maze[i][j]
+            if val != '0' and val != '2':
+                start_point = (j, i)
+                j = FindEndPoint_hor(i, j+1)
+                end_point = (j, i)            
+                hor_lines.append([start_point,end_point])
+            j += 1
 
-content = r"""\documentclass[10pt]{{article}}
+    # vertical walls
+    for i in range(N):
+        j = 0
+        while j < M:
+            
+            val = maze[j][i]
+            if val != '0' and val != '1':
+                start_point = (i, j)
+                j = FindEndPoint_ver(j+1, i)
+                end_point = (i, j)            
+                ver_lines.append([start_point,end_point])
+            j += 1
+    
+    
+    # combine all walls
+    hor_lines.extend(ver_lines)
+
+    for i in hor_lines:
+        txt = '    \draw ({},{}) -- ({},{});\n'.format(i[0][0], i[0][1], i[1][0], i[1][1])
+        final_walls += txt
+
+    """
+    pillars Section
+    ---------------------------------------------------------------------
+    """
+
+    for i in range(M):
+        for j in range(N):
+            val = maze[i][j]
+            # only work for value '0'
+            if val == '0':
+                # check for first row
+                if i == 0:
+                    #top left point
+                    if j == 0:
+                        pillars.append((j, i))
+                        continue
+                    # check left point if equal to 0 or 2
+                    left_val = maze[i][j-1]
+                    if left_val == '0' or left_val == '2':
+                        pillars.append((j, i))
+                        continue
+                # check for first item below first low
+                top_val = maze[i - 1][j]
+                if j == 0:
+                    # check for one point above
+                    if top_val == '0' or top_val == '1':
+                        pillars.append((j, i))
+                        continue
+                # check for rest point
+                left_val = maze[i][j-1]
+                if (top_val == '0' or top_val == '1') and (left_val == '0' or left_val == '2'):
+                    pillars.append((j, i))
+                    
+    for i in pillars:
+        txt = '    \\fill[green] ({},{}) circle(0.2);\n'.format(i[0], i[1])
+        final_Pillars += txt
+
+    """
+    cul_de_sacs Section
+    ---------------------------------------------------------------------
+    """
+    DefineSpaceObject()
+    
+    for i in range(M-1):
+        for j in range(N-1):
+            MarkWay(i, j)
+
+    showList = []
+    for i in range(M-1):
+        tempList = []
+        for j in range(N-1):
+            tempList.append(pathObject[i][j].value)
+            if pathObject[i][j].value == -1:
+                red_cross.append((j+0.5, i+0.5))
+        showList.append(tempList)
+    DisplayList(showList)
+    print(maze)
+    for i in red_cross:
+        txt = '    \\node at ({},{}) {{}};\n'.format(i[0], i[1])
+        final_red_cross += txt
+
+    """
+    entry-exit path
+    ---------------------------------------------------------------------
+    """
+    MarkEntryExit()
+
+    for i in range(M-1):
+        for j in range(N-1):
+            if pathObject[i][j].value == -2:
+                entryPoint.append((j, i))
+    FindYellowPath()
+
+    for i in final_path_set:
+        a = i[0][0]
+        b = i[0][1]
+        c = i[1][0]
+        d = i[1][1]
+        if a < -0.5:
+            a = -0.5
+        if a > N:
+            a -= 1
+            
+        if b < -0.5:
+            b = -0.5
+        if b > M:
+            b -= 1
+            
+        if c < -0.5:
+            c = -0.5
+        if c > N:
+            c -= 1
+        
+        if d < -0.5:
+            d = -0.5
+        if d > M:
+            d -= 1
+        
+        txt = '    \draw[dashed, yellow] ({},{}) -- ({},{});\n'.format(a,b,c,d)
+        final_path += txt
+    
+
+    """
+    write to tex file
+    ---------------------------------------------------------------------
+    """
+    content = r"""\documentclass[10pt]{{article}}
 \usepackage{{tikz}}
 \usetikzlibrary{{shapes.misc}}
 \usepackage[margin=0cm]{{geometry}}
@@ -887,70 +827,58 @@ content = r"""\documentclass[10pt]{{article}}
 \end{{center}}
 \vspace*{{\fill}}
 
-\end{{document}}""".format(final_walls, final_Pillars, final_red_cross,final_path)
-content = content.encode('utf-8')
+\end{{document}}""".format(final_walls, final_Pillars, final_red_cross, final_path)
+    content = content.encode('utf-8')
 
 
-
-with open('cover2.tex','wb') as f:
-    f.write(content)
-
-
-
+    tex_name = sys.argv[-1][:-4] + '.tex'
+    with open(tex_name,'wb') as f:
+        f.write(content)
+    
+"""
+Check input
+-----------------------------
 """
 
+in_len = len(sys.argv)
 
-def DefineSapce():
-    for i in range(M-1):
-        for j in range(N-1):
-            val_1 = maze[i][j]
-            val_2 = maze[i][j + 1]
-            val_3 = maze[i + 1][j]
+while True:
+    try:
+        # check for numbers of input parameters
+        if not (in_len == 3 or in_len == 4):
+            raise ValueError
+        
+        # allocated variables
+        _fName = sys.argv[-1]
+        _fdash = sys.argv[-2]
+        _print = sys.argv[-3]
+        
+        # check for parameters_1: if the file existing
+        if not os.path.exists(_fName):
+            raise ValueError
+        # check if the content is within constraint
+        if not Check_file_content(_fName):
+            print(errMsg_2)
+            sys.exit()
+        
+        # check for parameters_2: --file
+        if _fdash != '--file':
+            raise ValueError
+        
+        # check for parameters_3: with or without 'print'
+        if in_len == 3:
+            GenerateText()
+            break
+        
+        if in_len == 4:
+            if _print != '-print':
+                    raise ValueError
+            GeneratePdf()
+            break
+    except ValueError:
+        print(errMsg_1)
+        sys.exit()
+    
+        
+    
 
-            if val_1 == '0':
-                if val_2 == '0' or val_2 == '1':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 4
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 3
-                        continue
-                if val_2 == '2' or val_2 == '3':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 3
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 2
-                        continue
-                    
-            if val_1 == '1' or val_1 == '2':
-                if val_2 == '0' or val_2 == '1':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 3
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 2
-                        continue
-                if val_2 == '2' or val_2 == '3':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 2
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 1
-                        continue
-
-            if val_1 == '3':
-                if val_2 == '0' or val_2 == '1':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 2
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 1
-                        continue
-                if val_2 == '2' or val_2 == '3':
-                    if val_3 == '0' or val_3 == '2':
-                        mazePath[i][j] = 1
-                        continue
-                    if val_3 == '1' or val_3 == '3':
-                        mazePath[i][j] = 0                   
-"""  
