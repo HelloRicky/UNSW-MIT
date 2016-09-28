@@ -4,7 +4,7 @@ import copy
 
 if __name__ == "__main__":
     #sys.argv = ['maze.py', '-print', '--file', 'maze1.txt']
-    sys.argv = ['maze.py', '--file', 'maze1.txt']
+    sys.argv = ['maze.py', '--file', 'maze3.txt']
 
 
 """
@@ -47,7 +47,7 @@ yellowMaze =[]
 # question 1
 gates = 0
 wallSet = 0
-
+inaccess = 0
 
 """
 Class and Functions
@@ -775,6 +775,16 @@ def General():
         final_red_cross += txt
 
     """
+    inaccessible points
+        
+    """
+    global inaccess
+    for i in pathObject:
+        for j in i:
+            if j.value == 0:
+                inaccess += 1
+
+    """
     entry-exit path
     ---------------------------------------------------------------------
     """
@@ -848,40 +858,56 @@ def General():
     wallMaze = copy.deepcopy(maze)
 
     def SeekWall(i, j):
+        #print('-'*10)
+        #print('excute', i, j, 'mazevalue', wallMaze[i][j])
         val = wallMaze[i][j]
         if val == '0':
             if j - 1 >= 0 and (wallMaze[i][j -1] == '1' or wallMaze[i][j - 1] == '3'):
-                while j >= 0:
-                    SeekWall(i, j - 1)
-                    j -= 1
+                SeekWall(i, j - 1)
+                j -= 1
+            
+            if i - 1 >= 0 and (wallMaze[i-1][j] == '2' or wallMaze[i-1][j] == '3'):
+                SeekWall(i - 1, j)
+                i -= 1
+            
             return
         if val == '1':
             wallMaze[i][j] = '0'
             if j + 1 < N:
-                while j < N:
-                    SeekWall(i, j + 1)
-                    j += 1
+                SeekWall(i, j + 1)
+            if i - 1 >= 0 and (wallMaze[i-1][j] == '2' or wallMaze[i-1][j] == '3'):
+                SeekWall(i - 1, j)
+            if j - 1 >= 0 and (wallMaze[i][j -1] == '1' or wallMaze[i][j - 1] == '3'):
+                SeekWall(i, j - 1)
+                j -= 1
             return
         if val == '2':
             wallMaze[i][j] = '0'
             if i + 1 < M:
                 SeekWall(i + 1, j)
+            if j - 1 >= 0 and (wallMaze[i][j - 1] == '1' or wallMaze[i][j - 1] == '3'):
+                SeekWall(i, j - 1)
+            if i - 1 >= 0 and (wallMaze[i-1][j] == '2' or wallMaze[i-1][j] == '3'):
+                SeekWall(i - 1, j)
+                i -= 1
             return
         if val == '3':
             wallMaze[i][j] = '0'
+            SeekWall(i, j)
             if j + 1 < N:
                 SeekWall(i, j + 1)
             if i + 1 < M:
                 SeekWall(i + 1, j)
             return
 
-    count = 0
+    global wallSet
     for i in range(M):
         for j in range(N):
             if wallMaze[i][j] != '0':                
                 SeekWall(i, j)
-                count += 1
-    print('wall count', count)     
+                wallSet += 1
+                print()
+                DisplayList(wallMaze)
     
 def GenerateText():
     print('here is GenerateText')
@@ -892,6 +918,23 @@ def GenerateText():
         print('The maze has a single gate.')
     else:
         print('The maze has {} gates.'.format(gates))
+    
+
+    if not wallSet:
+        print('The maze has no inaccessible inner point.')
+    elif wallSet == 1:
+        print('The maze has a unique inaccessible inner point.')
+    else:
+        print('The maze has {} inaccessible inner points.'.format(wallSet))
+    
+    if not inaccess:
+        print('The maze has no accessible area.')
+    elif inaccess == 1:
+        print('The maze has a unique accessible area.')
+    else:
+        print('The maze has {} accessible areas.'.format(inaccess))
+
+
     
 def GeneratePdf():
     print('here is GeneratePdf')
