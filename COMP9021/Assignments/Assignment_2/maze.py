@@ -4,7 +4,7 @@ import copy
 
 if __name__ == "__main__":
     #sys.argv = ['maze.py', '-print', '--file', 'maze1.txt']
-    sys.argv = ['maze.py', '--file', 'maze1.txt']
+    sys.argv = ['maze.py', '--file', 'maze3.txt']
 
 
 """
@@ -48,7 +48,8 @@ yellowMaze =[]
 gates = 0
 wallSet = 0
 inaccess = 0
-
+acc_area = 0
+blocker = 0
 path_num = 0
 
 """
@@ -944,45 +945,54 @@ def General():
         print()
 
     def Walker(i, j):
-        if i < 0 or j <0 or i >N-2 or j >M-2:
+
+        if i < 0 or j <0 or i >M-2 or j >N-2:
             return
         #print('i, j', i, j)
-        space = tempPath[j][i]
+        space = tempPath[i][j]
         if space.value <= 1:
             return
         #if j > 0 and j < M - 3:
         if space.W_wall == 0:
             space.value -= 1
-            if j > 0 and tempPath[j - 1][i].value > 1:
+            if j > 0 and tempPath[i][j - 1].value > 1:
+                
+                tempPath[i][j - 1].E_wall = 1
                 Walker(i, j - 1)
         if space.E_wall == 0:
+            #print('test', j < N-3, tempPath[j + 1][i].value)
             space.value -= 1
-            if j < N-3 and tempPath[j + 1][i].value > 1:
+            if j < N-2 and tempPath[i][j + 1].value > 1:
+              
+                tempPath[i][j + 1].W_wall = 1
                 Walker(i, j + 1)
         #if i > 0 and i < N - 3:
         if space.N_wall == 0:
             space.value -= 1
-            if i > 0 and tempPath[j][i - 1].value > 1:
+            if i > 0 and tempPath[i - 1][j].value > 1:
+                
+                tempPath[i - 1][j].S_wall = 1
                 Walker(i - 1, j)
         if space.S_wall == 0:
+
             space.value -= 1
-            if i < M - 3 and tempPath[j][i + 1].value > 1:
+            
+            if i < M - 2 and tempPath[i + 1][j].value > 1:
+                
+                tempPath[i + 1][j].N_wall = 1
                 Walker(i + 1, j)
         return
-    count = 0
+    global acc_area
+
     for gate in gateSet:
         i = gate[1]
         j = gate[0]
-        if tempPath[i][j].value > 1:
+        if tempPath[i][j].value == -1:
+            acc_area += 1
+        elif tempPath[i][j].value > 1:
             Walker(i, j)
-            count += 1
-            print('-'*8)
-            for i in range(M-1):
-                for j in range(N-1):
-                    print(tempPath[i][j].value, end=' ')
-                print()
+            acc_area += 1
 
-    print('gateSet:', count)
     """
     for i in gateSet:
         x = i[0]
@@ -998,11 +1008,84 @@ def General():
         tempList = []
         
             tempList.append(tempPath[i][j].value)
-        showList.append(tempList)
+        showList.append(
     DisplayList(showList)
     print()
     """
 
+    """
+    connected cul-de-sacs
+    ---------------------------------------------------------------------
+    """
+
+    blockPath = DefineSpaceObject()
+    
+    print('tempPath')
+    for i in red_cross:
+        x = int(i[1] - 0.5) 
+        y = int(i[0] - 0.5)
+        blockPath[x][y].value = -1
+
+    def Blocker(i, j):
+        if i < 0 or j <0 or i >M-2 or j >N-2:
+            return
+        #print('i, j', i, j)
+        space = blockPath[i][j]
+        if space.value != -1:
+            return
+        if space.N_wall and space.S_wall and space.W_wall and space.E_wall:
+            space.value = 0
+            return
+        #if j > 0 and j < M - 3:
+        if space.W_wall == 0:
+            space.value = 0
+            if j > 0 and blockPath[i][j - 1].value == -1:
+                
+                blockPath[i][j - 1].E_wall = 1
+                Blocker(i, j - 1)
+        if space.E_wall == 0:
+            #print('test', j < N-3, blockPath[j + 1][i].value)
+            space.value = 0
+            if j < N-2 and blockPath[i][j + 1].value == -1:
+               
+                blockPath[i][j + 1].W_wall = 1
+                Blocker(i, j + 1)
+        #if i > 0 and i < N - 3:
+        if space.N_wall == 0:
+            space.value = 0
+            if i > 0 and blockPath[i - 1][j].value == -1:
+                
+                blockPath[i - 1][j].S_wall = 1
+                Blocker(i - 1, j)
+        if space.S_wall == 0:
+
+            space.value = 0
+            
+            if i < M - 2 and blockPath[i + 1][j].value == -1:
+                
+                blockPath[i + 1][j].N_wall = 1
+                Blocker(i + 1, j)
+        return
+
+
+    
+    global blocker
+    
+    for i in range(M-1):
+        for j in range(N-1):
+            if blockPath[i][j].value == -1:
+                print(i, j, blockPath[i][j].value)
+                Blocker(i, j)
+                print('result', blocker)
+                """
+                for i in range(M-1):
+                    for j in range(N-1):
+                        print(blockPath[i][j].value, end=' ')
+                    print()
+                """
+                blocker += 1
+   
+    
     """
     allPath
     ---------------------------------------------------------------------
@@ -1056,7 +1139,20 @@ def GenerateText():
     else:
         print('The maze has {} accessible areas.'.format(inaccess))
 
+    if not acc_area:
+        print('The maze has no accessible area.')
+    elif acc_area == 1:
+        print('The maze has a unique accessible area.')
+    else:
+        print('The maze has {} accessible areas.'.format(acc_area))
+        
     
+    if not blocker:
+        print('The maze has no accessible cul-de-sac.')
+    elif blocker == 1:
+        print('The maze has accessible cul-de-sacs that are all connected.')
+    else:
+        print('The maze has {} sets of accessible cul-de-sacs that are all connected.'.format(blocker))
 
     if not path_num:
         print('The maze has no entry-exit path with no intersection not to cul-de-sacs.')
