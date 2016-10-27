@@ -1,0 +1,1666 @@
+;====================================================================
+;COMP9032 16S2 Final Project
+;Composed by Fu Zheng
+;Student ID: z3369444
+;
+;====================================================================
+
+
+.include "m2560def.inc"			; import library
+
+
+;====================================================================
+;
+;Define Section
+;
+;====================================================================
+
+.def set_x = r19				; to be use as destination x in Auto mode
+.def set_y = r17				; to be use as destination y in Auto mode
+.def set_z = r15				; to be use as destination z in Auto mode
+.def set_spd = r14				; to be use as preset speed in Auto mode
+.def lcd_count = r13			; to track current input digit during SetDestination process in Auto mode
+.def keyflag = r12				; to identify if it is in set destination phase, switch to extract key value
+
+.def timercount = r20			; to count number of overflow event occured
+
+.def pos_x = r2					; for current position x
+.def pos_y = r3					; for current position y
+.def pos_z = r4					; for current position z (height)
+.def tot_dist = r5				; for total distance been travelled
+.def tot_time = r6				; for total time (in second) during flight
+.def dir_val = r7				; for flight direction. e.g. R, L, F, U, D and H
+
+.def tens = r26					; tens digit to be displayed on LCD
+.def units = r25				; units digit to be displayed on LCD
+.def compass = r29				; global compass, e.g. N, W, S and E
+.def mode = r30					; flying mode, e.g. M and A
+.def curspeed = r31				; UAV current speed
+
+;keypad scan
+.def row = r21 					; current row number
+.def col = r22 					; current column number
+.def rmask = r23 				; mask for current row during scan
+.def cmask = r24 				; mask for current column during scan
+.def temp1 = r27				; temporary register 1
+.def temp2 = r28				; temporary register 2
+
+;====================================================================
+;
+;Equ Section
+;
+;====================================================================
+
+;LCD constant value set up
+.equ LCD_CTRL_PORT = PORTA
+.equ LCD_CTRL_DDR = DDRA
+.equ LCD_RS = 7
+.equ LCD_E  = 6
+.equ LCD_RW = 5
+.equ LCD_BE = 4
+
+; LCD port setup
+.equ LCD_DATA_PORT = PORTF
+.equ LCD_DATA_DDR = DDRF
+.equ LCD_DATA_PIN = PINF
+
+
+;keypad port setup
+.equ PORTKDIR = 0xF0 			; PL7-4: output, PL3-0, input
+.equ INITCOLMASK = 0xEF 		; scan from the leftmost column,
+.equ INITROWMASK = 0x01 		; scan from the top row
+.equ ROWMASK = 0x0F 				; for obtaining input from Port L
+
+;====================================================================
+;
+;macro Section
+;
+;====================================================================
+
+;------------------LCD Operations------------------
+
+.macro GetTens
+; macro to separate double digits to single digit, e.g. 24-> 2, 4
+
+	clr tens
+	mov units, @0
+	ldi temp2, 0x30				; add ascii value to output
+
+	tst @0						; check if input is negative
+	brmi negative_output		; if true, jump to branch
+
+	tens_loop1:					; extract the input value into tens digit and units digit, e.g 24 -> 2, 4
+		cpi units,10			; check if current value less then 10,
+		brlo tens_done			; if less than 10, extraction complete 
+		subi units, 10			; reduce input value by one
+		inc tens				; also record numbers of tens reduced
+		rjmp tens_loop1
+		
+	negative_output:			; 
+		ldi temp1, '-'
+		mov tens, temp1
+		ldi temp1, 0xFF			; apply 2's complement to find absolute value, 
+		inc temp1				; 
+		sub temp1, units		; (2**n - b)	
+		mov units, temp1		; copy value
+		rjmp negative_done		; skip adding ascii
+
+	tens_done:	
+		add tens, temp2			; only add ascii to tens in tens case
+		
+	negative_done:
+		add units, temp2		; add ascii to units in both case
+
+.endmacro
+
+
+.macro STORE
+; macro to store value for LCD section
+	.if @0 > 63
+		sts @0, @1
+	.else
+		out @0, @1
+	.endif
+.endmacro
+
+.macro LOAD
+; macro to load value for LCD section
+	.if @1 > 63
+		lds @0, @1
+	.else
+		in @0, @1
+	.endif
+.endmacro
+
+.macro do_lcd_command
+; macro to send command to LCD controller
+	ldi r16, @0
+	rcall lcd_command
+	rcall lcd_wait
+.endmacro
+
+.macro do_lcd_data
+; macro to display data to LCD
+	mov r16, @0
+	rcall lcd_data
+	rcall lcd_wait
+.endmacro
+
+.macro print_lcd
+; macro to deliver data to display macro
+	ldi temp1, @0
+	do_lcd_data temp1
+.endmacro
+
+.macro lcd_set
+; macro for LCD controller port
+	sbi LCD_CTRL_PORT, @0
+.endmacro
+
+.macro lcd_clr
+; macro for LCD controller port
+	cbi LCD_CTRL_PORT, @0
+.endmacro
+
+;------------------ACTIONS during flight------------------
+
+.macro CrashAction
+; when it is crashed, Stop engine, but keep previous speed on LCD screen.(show current location and flash LED)
+
+	; Motor Sector
+	clr curspeed				; set speed to zero
+	MOTOR_SPEED					; update motor speed
+
+	; LED section
+	clr temp1					; use 0x00 as initial LED pattern
+
+	led_flash:					; loop for flash
+		
+		com temp1				; flip the output, e.g. 0x00 -> 0xFF
+		out PORTC, temp1		; show pattern to LED bar
+
+		clr temp2				; reset to zero for timer
+		led_delay:				; time delay for showing led
+			cpi temp2,100 		; check if equal to 100
+			breq led_flash		; switch off led if reaches 100
+			rcall sleep_5ms		; otherwise sleep for 5ms
+			inc temp2			; add one to temp1
+			rjmp led_delay		; return and check again
+
+		rjmp led_flash
+.endmacro
+
+
+.macro LandingAction
+; when z = 0, stop engine. (Show landing message and stop engine)
+
+
+	; Motor Sector
+	clr curspeed				; set speed to zero
+	MOTOR_SPEED					; update motor speed
+
+	; LCD Sector
+
+	do_lcd_command 0b00000001 	; clear display
+
+	;print position
+	print_lcd 'D'
+	print_lcd 'i'
+	print_lcd 's'
+	print_lcd 't'
+	print_lcd 'a'
+	print_lcd 'n'
+	print_lcd 'c'
+	print_lcd 'e'
+	print_lcd ':'
+
+	
+	GetTens tot_dist			; break double digit into tens and units digits, e.g. 24->2 and 4
+
+	do_lcd_data tens			; display to LCD: position x_1, e.g. 2
+				
+	do_lcd_data units			; display to LCD: position x_2, e.g. 4
+
+	print_lcd 'm'				; m for meters
+
+	;change next line
+	do_lcd_command 0b11000000 	;move to next line
+
+	;do_lcd_data position
+	print_lcd 'D'
+	print_lcd 'u'
+	print_lcd 'r'
+	print_lcd 'a'
+	print_lcd 't'
+	print_lcd 'i'
+	print_lcd 'o'
+	print_lcd 'n'
+	print_lcd ':'
+
+	
+	GetTens tot_time			; break double digit into tens and units digits
+
+	do_lcd_data tens			; position x_1
+				
+	do_lcd_data units			; position x_2
+
+	print_lcd 's'				; s for seconds
+
+	landed_halt:				; stop process by halting
+		rjmp landed_halt
+
+.endmacro
+
+.macro Update_Pos
+; check current direction and update distance
+	
+	mov temp1, dir_val			; load the direction value to temp register
+
+	cpi temp1, 'U'				; if flying upward
+	breq br_U
+	
+	cpi temp1, 'D'				; if flying downward
+	breq br_D
+
+	cpi temp1, 'F'				; if flying forward
+	breq br_F
+
+	cpi temp1, 'L'				; if turning left
+	breq br_L
+
+	cpi temp1, 'R'				; if turning right
+	breq br_R
+
+	rjmp br_out					; in case hovering, e.g. H
+	
+	;------------- direction branches -------------
+	
+	br_U:						; upward branch
+
+		add tot_dist, curspeed		; add distance
+		add pos_z, curspeed			; add height
+		rjmp br_out
+
+	br_D:						; downward branch
+		add tot_dist, curspeed		; add distance
+		sub pos_z, curspeed			; decrease height
+		rjmp br_out
+	
+	
+	br_F:						;move forward branch
+		
+		add tot_dist, curspeed		; add distance
+
+		ldi temp1, 'N'				; if flying North
+		cp temp1, compass
+		breq f_N
+
+		ldi temp1, 'S'				; if flying South
+		cp temp1, compass
+		breq f_S
+
+		ldi temp1, 'W'				; if flying West
+		cp temp1, compass
+		breq f_W
+
+		ldi temp1, 'E'				; if flying East
+		cp temp1, compass
+		breq f_E
+		
+		rjmp br_out					; should not follow into this step, but add in for future development	
+		
+		; ------------- compass branches (update total distance) -------------
+		
+		f_N:						; North branch
+			add pos_y, curspeed
+			rjmp br_out
+		f_S:						; South branch
+			sub pos_y, curspeed
+			rjmp br_out
+		f_W:						; West branch
+			sub pos_x, curspeed
+			rjmp br_out
+		f_E:						; East branch
+			add pos_x, curspeed
+			rjmp br_out
+	
+	br_L:							; rotate to Left
+		ldi temp1, 'N'				
+		cp temp1, compass
+		breq L_N
+
+		ldi temp1, 'S'
+		cp temp1, compass
+		breq L_S
+
+		ldi temp1, 'W'
+		cp temp1, compass
+		breq L_W
+
+		ldi temp1, 'E'
+		cp temp1, compass
+		breq L_E
+		
+		rjmp br_out					; should not follow into this step, but add in for future development	
+		
+		; ------------- compass branches (update direction) -------------
+		
+		L_N:
+			ldi compass, 'W'
+			rjmp br_out
+		L_S:
+			ldi compass, 'E'
+			rjmp br_out
+		L_W:
+			ldi compass, 'S'
+			rjmp br_out
+		L_E:
+			ldi compass, 'N'
+			rjmp br_out
+
+	br_R:							; rotate to Right
+		ldi temp1, 'N'
+		cp temp1, compass
+		breq R_N
+
+		ldi temp1, 'S'
+		cp temp1, compass
+		breq R_S
+
+		ldi temp1, 'W'
+		cp temp1, compass
+		breq R_W
+
+		ldi temp1, 'E'
+		cp temp1, compass
+		breq R_E
+		
+		rjmp br_out					; should not follow into this step, but add in for future development	
+		
+		; ------------- compass branches (update direction) -------------
+		
+		R_N:
+			ldi compass, 'E'
+			rjmp br_out
+		R_S:
+			ldi compass, 'W'
+			rjmp br_out
+		R_W:
+			ldi compass, 'N'
+			rjmp br_out
+		R_E:
+			ldi compass, 'S'
+			rjmp br_out
+
+	br_out:						
+.endmacro
+
+;------------------ACTIONS AUTO mode------------------
+
+.macro defaultAutoVal
+; only use it in Auto mode: set up default value for destination and speed
+
+	ldi set_x, 0x28					;set to 40
+	ldi set_y, 0x28					;set to 40
+	ldi temp1, 0x08
+	mov set_z, temp1				;set to 8
+	ldi temp1, 0x01
+	mov set_spd, temp1				;set to 1
+.endmacro
+
+.macro SetDestination
+;only use it in Auto mode: provide UI for user to insert destination and speed
+
+	ldi temp1, 0x01
+	mov keyflag, temp1				; activate keyflag
+	
+	do_lcd_command 0b00000001 		; clear display
+	
+	do_lcd_command 0b00010100		;space
+	print_lcd 'X'
+
+	do_lcd_command 0b00010100		;space
+	do_lcd_command 0b00010100		;space
+	do_lcd_command 0b00010100		;space
+	print_lcd 'Y'
+
+	do_lcd_command 0b00010100		;space
+	do_lcd_command 0b00010100		;space
+	print_lcd 'Z'
+
+	do_lcd_command 0b00010100		;space
+	do_lcd_command 0b00010100		;space
+	print_lcd 'S'
+	print_lcd 'p'
+	print_lcd 'e'
+	print_lcd 'e'
+	print_lcd 'd'
+
+	do_lcd_command 0b11000000 		;move to next line
+
+	print_lcd '4'
+	print_lcd '0'
+	print_lcd ','
+	do_lcd_command 0b00010100		;space
+
+	print_lcd '4'
+	print_lcd '0'
+	print_lcd ','
+	do_lcd_command 0b00010100		;space
+
+	print_lcd '8'
+	print_lcd ','
+	do_lcd_command 0b00010100		;space
+
+	print_lcd '1'
+	print_lcd 'm'
+	print_lcd '/'
+	print_lcd 's'
+	
+	do_lcd_command 0b00001101 		; Cursor off, bar, no blink
+	do_lcd_command 0b00000010 		; return home
+	do_lcd_command 0b11000000 		; move to next line, so user can start input value 
+	
+.endmacro
+
+.macro EntryDestinationCheck
+; once B key is pressed, check if input digits are valid
+
+	mov temp2, lcd_count			; use lcd_count to identify which digit is currently been entered
+	cpi	temp2, 0					; 1st digit
+	breq tensCheck
+	
+	cpi	temp2, 1					; 2nd digit
+	breq unitsCheck_x
+
+	cpi	temp2, 2					; 3rd digit
+	breq tensCheck
+
+	cpi	temp2, 3					; 4th digit
+	breq unitsCheck_y
+
+	cpi	temp2, 4					; 5th digit, height
+	breq unitsCheck_z
+
+	cpi	temp2, 5					; 6th digit, speed
+	breq unitsCheck_s
+
+	rjmp InputCheckEnd				
+
+	tensCheck:						; only x and y has tensCheck, 
+		ldi temp2, 0x35				; check if digit greater than 5
+		cp @0, temp2
+		brlo validInput				; accepted if less than 5
+		rjmp InputCheckEnd			; invalid entry, no digit is processed
+
+	unitsCheck_x:					; unit digit can be any number, except for 0 if ten digit is 0 already
+
+		tst set_x					; check if current x is zero
+		breq x_zero					; branch out for input check
+		rjmp x_continue
+		
+	x_zero:							; if tens digit is 0 already, check if new input is zero
+		ldi temp2, 0x30
+		cp @0, temp2				
+		breq Input_nearby			; if zero -> invalid entry, no digit is processed
+	x_continue:
+		rjmp validInput				; otherwise valid input e.g. (1-9)
+
+
+	unitsCheck_y:					; similar to set_x
+		tst set_y					; both digit can't be zero
+		breq y_zero
+		rjmp y_continue
+	y_zero:
+		ldi temp2, 0x30
+		cp @0, temp2
+		breq Input_nearby
+	y_continue:
+		rjmp validInput
+
+
+	unitsCheck_z:					; z must be greater than 0 but less than 10
+		ldi temp2, 0x31				; check if less than 1
+		cp @0, temp2
+		brlo Input_nearby			; invalid entry, no digit is processed
+
+		ldi temp2, 0x3A				; checking 2nd constraint for height: less than 10
+		cp @0, temp2
+		brlo validInput				; valid input
+		rjmp InputCheckEnd			; nvalid entry, no digit is processed
+
+	unitsCheck_s:					; speed must be in range 1-4
+		ldi temp2, 0x31				; check if less than 1
+		cp @0, temp2
+		brlo Input_nearby			; invalid entry, no digit is processed
+
+		ldi temp2, 0x35				; less then 5
+		cp @0, temp2
+		brlo validInput				; checking 2nd constraint for height: less than 5
+		rjmp InputCheckEnd			; invalid entry, no digit is processed
+		
+		rjmp Input_continue			; since the code is too long for relative jump...
+	Input_nearby:					; intermedia jump is set up
+		rjmp InputCheckEnd
+	Input_continue:
+
+
+
+	validInput:						; only record and print to lcd when input is valid
+		inc lcd_count				; increase counter by 1 for next digit
+
+		do_lcd_data @0				; update input to LCD
+		assignInput @0				; also load input value to register e.g. set_x, set_y...
+
+		ldi temp2, 2				; first comma
+		cp lcd_count, temp2			
+		breq shiftSpace
+
+		ldi temp2, 4				; 2nd comma
+		cp lcd_count, temp2
+		breq shiftSpace
+		
+		ldi temp2, 5				; 3rd comma
+		cp lcd_count, temp2
+		breq shiftSpace
+		
+		
+		rjmp InputCheckEnd
+		shiftSpace:
+			do_lcd_command 0b00010100		;shift extra space
+			do_lcd_command 0b00010100		;shift extra space
+
+		
+	InputCheckEnd:
+	
+.endmacro
+
+
+.macro assignInput
+; once the input is value, assign user's input to destination registers. e.g. set_x, set_y, set_z and set_spd
+
+	mov temp2, lcd_count			; check position for current input digit
+	
+	cpi temp2, 1					; tens digit for set_x
+	breq setX_1
+	
+	cpi temp2, 2					; unit digit for set_x
+	breq setX_2
+
+	cpi temp2, 3					; tens digit for set_y
+	breq setY_1
+
+	cpi temp2, 4					; unit digit for set_y
+	breq setY_2
+
+	cpi temp2, 5					; digit for set_z
+	breq setZ_1
+
+	cpi temp2, 6					; digit for set_spd
+	breq setS_1
+
+	rjmp assignEnd
+
+	setX_1:
+		subi @0, 0x30				; convert it to digit
+		ldi temp2, 10
+		mul temp1, temp2			; times 1st digit value by 10
+		mov set_x, r0				; load result to set_x
+		rjmp assignEnd
+		
+	setX_2:
+		subi @0, 0x30				; convert it to digit
+		add set_x, temp1
+		rjmp assignEnd
+
+	setY_1:
+		subi @0, 0x30				; convert it to digit
+		ldi temp2, 10				
+		mul temp1, temp2			; times 3st digit value by 10
+		mov set_y, r0				; load result to set_y
+		rjmp assignEnd
+		
+	setY_2:
+		subi @0, 0x30				; convert it to digit
+		add set_y, temp1
+		rjmp assignEnd
+
+	setZ_1:
+		subi @0, 0x30				; convert it to digit
+		mov set_z, temp1
+		rjmp assignEnd
+
+	setS_1:
+		subi @0, 0x30				; convert it to digit
+		mov set_spd, temp1
+		rjmp assignEnd
+
+	assignEnd:
+.endmacro
+
+
+.macro AjustmentSpeed
+;adjustment to avoid overspeed that causes crash
+	clr r18						
+	inc r18							; if set_speed is 1
+	cp set_spd, r18					; skip further speed update
+	breq adEnd
+
+	clr r11							; clear r11
+
+	cp @0, @1						; compare input parms
+	breq adEnd						; skip if both are equal
+	brge largeFirst					
+		
+
+	mov r11, @1						; if @1 > @0
+	sub r11, @0						; r11 = @1 - @0
+	rjmp afterFirst
+	largeFirst:						; if @0 > @1
+		mov r11, @0					
+		sub r11, @1					; r11 = @0 - @1
+
+	afterFirst:						; continue process after load value to r11
+		
+		cp r11, set_spd				; check if difference is less than input speed
+		brlo UpdateHere				; update current speed to r11 value
+		mov curspeed, set_spd		;otherwise restore preset speed
+		rjmp adEnd
+
+	UpdateHere:						; to avoid crash, need to change speed to r11 value
+		mov curspeed, r11
+		
+	adEnd:
+.endmacro
+
+.macro StartAutoFlying
+; once destination is set, flight starts
+	
+	mov curspeed, set_spd			;update speed
+
+; -------------Z position: during take off-----------------
+	
+	fly_takeoff:
+
+		AjustmentSpeed set_z, pos_z		; check for min distance for avoid crash
+
+		cp pos_z, set_z					; if current height is less than set height
+		brlo fly_takeoff				; continue looping until reach set z
+
+; -------------------------X position----------------------
+
+	fly_x_1:							; 1st situation for x: set_x > pos_x
+			
+		cp pos_x, set_x					; if current horizontal distance is less than set x
+		brlo fly_x_1a					; jump to flying action
+		rjmp fly_x_2					; otherwise check for 2nd situation for x
+	fly_x_1a:
+		CorrectRotation 'E', 'S'		; check for rotation
+		AjustmentSpeed pos_x, set_x		; control flying speed
+		
+		rjmp fly_x_1					; continue looping until reach set x
+
+	;;;;;;;;;;;;;;;;;;
+
+	fly_x_2:							; 2nd situation for x: set_x < pos_x
+
+		cp set_x, pos_x					
+		brlo fly_x_2a
+		rjmp fly_y_1
+	fly_x_2a:
+		CorrectRotation 'W', 'N'
+		AjustmentSpeed pos_x, set_x
+
+		rjmp fly_x_2
+		
+; -------------------------Y position----------------------
+
+	fly_y_1:							; 1st situation for y: set_y > pos_y
+		
+		cp pos_y, set_y
+		brlo fly_y_1a
+		rjmp fly_y_2					; move on for checking 2nd situation for y
+	fly_y_1a:							; action for current flying
+		CorrectRotation 'N', 'E'
+		AjustmentSpeed set_y, pos_y
+
+		rjmp fly_y_1
+
+	;;;;;;;;;;;;;;;;;;
+
+
+	fly_y_2:							; 2nd situation for y: set_y < pos_y
+
+		cp set_y, pos_y
+		brlo fly_y_2a
+		rjmp fly_landing				; reach destination, x and y, prepare to landing
+	fly_y_2a:							; action for current flying
+		CorrectRotation 'S', 'W'
+		AjustmentSpeed pos_y, set_y
+
+		rjmp fly_y_2
+
+; -------------Z position: during landing ------------------
+		
+	fly_landing:						; reduce height (z)
+		
+		ldi temp1, 'D'					; update direction for downward
+		
+		mov dir_val, temp1
+		clr temp1
+		AjustmentSpeed pos_z, temp1
+
+		tst pos_z						; check if current height less equal to zero
+		brne fly_landing
+
+.endmacro
+
+.macro CorrectRotation
+; to reach destination, UAV needs to rorate to the flight forward to the correct direction
+
+	;@0 wanted direction, @1 piority direction
+	correcting:
+		ldi temp2, @0
+		cp compass, temp2				; if current compass is different to wanted direction
+		brne PiorCorrect				; check for Piority compass
+		rjmp endCorrection
+
+	PiorCorrect:						; check if current compass == to piority compass
+		ldi temp2, @1
+		cp compass, temp2
+		breq PiorUpdate
+		rjmp NormalUpdate
+
+	PiorUpdate:							; make left run instead of right turn
+		ldi temp2, 'L'
+		mov dir_val, temp2
+		rjmp correcting
+
+	NormalUpdate:						; default rotation will be right turn
+		ldi temp2, 'R'
+		mov dir_val, temp2
+		rjmp correcting
+
+
+	endCorrection:						;after correct direction, move forward
+		ldi temp1, 'F'	
+		mov dir_val, temp1
+.endmacro
+
+
+.macro Check_Pos
+;check with position constrain, e.g. reach destination, crash, landing
+
+	; constaints:
+	;0 < pos_x < 50
+	;0 < pos_y < 50
+	;0 =< pos_z < 10
+
+	;------------------max value check-----------------------------
+
+	ldi temp1, 0x32				; load value 50
+
+	cp pos_x, temp1				; check max x
+	brge check_crash			; if x is equal or larger than 50, crashed
+
+	cp pos_y, temp1				; check max y
+	brge check_crash			; if y is equal or larger than 50, crashed
+
+	ldi temp1, 0xA				; load value 10
+
+	cp pos_z, temp1				; check max z
+	brge check_crash			; if z is equal or larger than 10, crashed
+
+	;------------------min value check-----------------------------
+
+	tst pos_x					; check min x, equal to zero or negative
+	breq check_crash			; if x is zero, crashed
+	brmi check_crash			; if x is negative, crashed
+
+	tst pos_y					; check min y, equal to zero or negative
+	breq check_crash			; if y is zero, crashed
+	brmi check_crash			; if y is negative, crashed
+
+	tst pos_z					; check min z, equal to zero or negative		
+	breq check_land				; if z is zero, action for landing
+	brmi check_crash			; if z is negative, crashed
+
+	rjmp check_done
+
+	check_crash:				; relative jump for crash action
+		CrashAction
+		rjmp check_done
+	check_land:					; relative jump for landing action
+		LandingAction
+
+	check_done:
+.endmacro
+
+.macro UpdateLCD_1
+; Update display content during flying
+
+	do_lcd_command 0b00000001 	; clear display
+
+	;do_lcd_data position
+	print_lcd 'P'
+	print_lcd 'O'
+	print_lcd 'S'
+	print_lcd ':'
+	print_lcd '('
+
+	GetTens @0					; break double digit into tens and units digits
+
+	do_lcd_data tens			; position x_1
+				
+	do_lcd_data units			; position x_2
+
+	print_lcd ','
+
+	GetTens @1					; break double digit into tens and units digits
+
+	do_lcd_data tens			; position y_1
+				
+	do_lcd_data units			; position y_2
+
+	print_lcd ','
+
+	GetTens @2					; break double digit into tens and units digits
+
+	do_lcd_data tens			; position z_1
+				
+	do_lcd_data units			; position z_2
+
+	print_lcd ')'
+	
+	;shift cursor to create space twice
+	do_lcd_command 0b00010100
+	do_lcd_data compass			; display compass direction
+
+	;change next line
+	do_lcd_command 0b11000000 	;move to next line
+
+	;do_lcd_data direction
+	print_lcd 'D'
+	print_lcd 'I'
+	print_lcd 'R'
+	print_lcd ':'
+
+	ldi temp1, 'U'
+	cp dir_val, temp1
+	breq show_dir
+	ldi temp1, 'D'
+	cp dir_val, temp1
+	breq show_dir
+	ldi temp1, 'F'
+	cp dir_val, temp1
+	breq show_dir
+	ldi temp1, 'R'
+	cp dir_val, temp1
+	breq show_dir
+	ldi temp1, 'L'
+	cp dir_val, temp1
+	breq show_dir
+
+	ldi temp1, 'H'				; for hovering state if above values do not matched
+	rjmp show_lcd_dir
+	
+	show_dir:
+		mov temp1, dir_val		; direction element
+	show_lcd_dir:
+		do_lcd_data temp1
+		
+		;shift cursor to create space twice
+		do_lcd_command 0b00010100	
+		do_lcd_command 0b00010100
+
+		;do_lcd_data speed
+		print_lcd 'S'
+		print_lcd 'P'
+		print_lcd 'D'
+		print_lcd ':'
+		
+
+		mov temp1, curspeed		; speed element
+		ldi temp2, 0x30			; add ascii value
+		add temp1, temp2
+		do_lcd_data temp1			
+		
+		print_lcd 'm'
+		print_lcd '/'
+		print_lcd 's'
+
+
+.endmacro
+
+.macro MOTOR_SPEED
+; send PWM signal to motor for various of speed spinning depending on current speed
+
+	cpi curspeed, 0x00			; if current speed is 0
+	breq spd_0
+	
+	cpi curspeed, 0x01			; if current speed is 1
+	breq spd_1
+	
+	cpi curspeed, 0x02			; if current speed is 2
+	breq spd_2
+	
+	cpi curspeed, 0x03			; if current speed is 3
+	breq spd_3
+	
+	cpi curspeed, 0x04			; if current speed is 4
+	breq spd_4
+	
+	spd_0:						; drop speed to zero
+		ldi temp1,0xFF
+		rjmp spd_out
+	spd_1:						; change to 25rps
+		ldi temp1,0xC0
+		rjmp spd_out
+	spd_2:						; change to 50 rps
+		ldi temp1,0x80
+		rjmp spd_out
+	spd_3:						; change to 75 rps
+		ldi temp1,0x40
+		rjmp spd_out
+	spd_4:						; full speed
+		ldi temp1,0x00
+		rjmp spd_out
+	spd_out:
+		sts OCR5AL, temp1		; update motor spinning speed
+
+.endmacro
+
+.macro ResetModeMessage
+; set up start/Reset message on LCD
+
+	do_lcd_command 0b00000001 	; clear display
+	
+	print_lcd 'S'
+	print_lcd 't'
+	print_lcd 'a'
+	print_lcd 'r'
+	print_lcd 't'
+	print_lcd ':'
+	print_lcd '('
+	mov temp1, mode				; display current mode
+	do_lcd_data temp1	
+
+	print_lcd ')'
+
+	do_lcd_command 0b11000000 	; move to next line
+	print_lcd 'K'
+	print_lcd 'e'
+	print_lcd 'y'
+
+	do_lcd_command 0b00010100	; shift for space
+	print_lcd 'B'
+	do_lcd_command 0b00010100	; shift for space
+	print_lcd 't'
+	print_lcd 'o'
+	do_lcd_command 0b00010100	; shift for space
+	print_lcd 'C'
+	print_lcd 'o'
+	print_lcd 'n'
+	print_lcd 'f'
+	print_lcd 'i'
+	print_lcd 'r'
+	print_lcd 'm'
+
+.endmacro
+
+;====================================================================
+;
+;RESET Section
+;
+;====================================================================
+
+jmp RESET
+
+.org OVF0addr					;interruption for overflow
+jmp Timer0OVF
+
+
+RESET:
+
+	clr curspeed				; initial speed	
+	MOTOR_SPEED					; update motor with new speed, e.g. stop 
+	ldi mode, 'M'				; set flight mode to be manual as default
+	clr keyflag					; reset keyflag for manual mode
+				
+;RESET AUTOposition
+	defaultAutoVal				; load default destination for auto mode
+
+;RESET keypad
+	ldi temp1, PORTKDIR 		; PF7:4/PF3:0, out/in
+	sts DDRK, temp1		
+
+;RESET PORTC LED
+	ser temp1 					; PORTC is output
+	out DDRC, temp1				
+	out PORTC, temp1			; full bar for start/Reset
+
+;RESET Timer0
+	ldi temp1, 0b00000000
+	out TCCR0A, temp1
+	ldi temp1, 0b00000101
+	out TCCR0B, temp1
+	ldi temp1, 1<<TOIE0
+	sts TIMSK0, temp1 
+
+
+;RESET LCD
+	ldi r16, low(RAMEND)
+	out SPL, r16
+	ldi r16, high(RAMEND)
+	out SPH, r16
+
+	ser r16
+	STORE LCD_DATA_DDR, r16
+	STORE LCD_CTRL_DDR, r16
+	clr r16
+	STORE LCD_DATA_PORT, r16
+	STORE LCD_CTRL_PORT, r16
+
+	do_lcd_command 0b00111000 	; 2x5x7
+	rcall sleep_5ms
+	do_lcd_command 0b00111000 	; 2x5x7
+	rcall sleep_1ms
+	do_lcd_command 0b00111000 	; 2x5x7
+	do_lcd_command 0b00111000 	; 2x5x7
+	do_lcd_command 0b00001000 	; display off
+	do_lcd_command 0b00000001 	; clear display
+	do_lcd_command 0b00000110 	; increment, no display shift
+	do_lcd_command 0b00001100 	; Cursor off, bar, no blink
+	
+
+	;Display message for initial
+
+	ResetModeMessage			; display initial message
+	clr lcd_count				; initial lcd position counter
+
+	;clr count
+	clr timercount				; initial overflow counter
+
+;RESET initial Position
+	ldi temp1, 0x19				; 0x19 = 25
+	mov pos_x, temp1			; default x, 25
+	mov pos_y, temp1			; default y,	25
+	clr pos_z					; default z
+	clr tot_dist				; reset distance to 0	
+	clr tot_time				; reset time to 0
+	ldi temp1, 'U'
+	mov dir_val, temp1			; reset flight direction to 1, which is upward
+	ldi temp1, 'N'
+	mov compass, temp1			; reset firection facing North
+
+;RESET PWM for motor
+	ldi temp1, 0b00001000		; Bit 4 will function as OC5A. 
+	sts DDRL,temp1				; the value controls the PWM duty cycle
+
+	ldi temp1, (1 << CS50|1<<CS51)
+	sts TCCR5B, temp1
+	ldi temp1, (1<< WGM50)|(1<<COM5A1|1<<COM5A0) 
+	sts TCCR5A, temp1
+
+;Enable Global Interrupt
+	sei
+
+jmp main
+
+;====================================================================
+;
+;Interrupt Section
+;
+;====================================================================
+
+
+Timer0OVF:						;overflow interrupt
+	; save conflict registers
+	push temp2
+	push temp1
+	in temp1, SREG
+	push temp1
+
+	clr r0						; clear r0 for muliplication result
+	inc timercount				; increase and record overflow counter
+	
+	cpi timercount, 61			; compare 61 round for 1 second
+	brne near_addr 				; if less than one second
+
+	; update after reaching one second	
+	cpi curspeed, 0				; check current speed
+	breq near_Clear				; if speed is zero, remain unchange
+
+	jmp continue_addr
+	near_addr:
+		jmp return
+		
+	continue_addr:
+
+	jmp continue_clear
+	near_Clear:
+		jmp ClearR
+
+	continue_clear:				; if motor is spinning	
+		
+		MOTOR_SPEED				; update motor speed
+
+		inc tot_time			; add 1 second to time
+		
+		Update_Pos				; update current position
+
+		UpdateLCD_1 pos_x, pos_y, pos_z	;update LCD message
+
+		Check_Pos				; check for position constraints 
+
+	ClearR:
+		clr timercount			; reset timercount
+	
+	; restore conflict registers before end of interrupt
+	return: 
+
+		pop temp1
+		out SREG, temp1
+		pop temp1
+		pop temp2
+
+	reti
+
+;====================================================================
+;
+;Main Section
+;
+;====================================================================	
+
+main:
+	ldi cmask, INITCOLMASK 		; initial column mask
+	clr col 					; initial column
+
+colloop:
+	cpi col, 4
+	breq main 					; if all keys are scanned, repeat.
+	sts PORTK, cmask 			; otherwise, scan a column
+	ldi temp1, 0xFF 			; slow down the scan operation.
+
+delay: 
+	dec temp1 					;compare with 0
+	brne delay 					;if not equal, then return to delay
+	; if equal, then get row input
+
+
+next:
+	lds temp1, PINK 			; read PORTL => PL3-PL0
+	andi temp1, ROWMASK 		; get the keypad output value => set
+	cpi temp1, 0xF 				; check if any row is low, 
+	breq nextcol     			; if yes, find which row is low
+	ldi rmask, INITROWMASK 		; initialize for row check
+	clr row
+
+rowloop:
+	cpi row, 4
+	breq nextcol 				; the row scan is over.
+	mov temp2, temp1
+	and temp2, rmask 			; check un-masked bit
+	breq convert 				; if bit is clear, the key is pressed
+	inc row 					; else move to the next row
+	lsl rmask
+	jmp rowloop
+
+nextcol: 						; if row scan is over
+	lsl cmask
+	inc col 					; increase column value
+	jmp colloop 				; go to the next column
+
+
+convert:	
+	cpi col, 3 					; If the pressed key is in col. 3
+	breq letters 				; we have a letter;
+	cpi row, 3 					; if the key is in row3,
+	breq symbols 				; we have a symbol or 0
+	mov temp1, row 				; Otherwise we have a number in 1-9
+	lsl temp1
+	add temp1, row
+	add temp1, col 				; temp1 = row*3 + col
+	subi temp1, -'1' 			; Add the value of character for ascii value	
+	
+	ldi temp2, 0x1				; check if A mode is actived
+	cp keyflag, temp2
+	brge convert_end_A_Mode
+	jmp convert_end				; display on LCD
+
+letters:
+	ldi temp1, 'A'
+	add temp1, row 				; Get the ASCII value for the key
+	
+	
+	jmp convert_end				; display on LCD
+
+symbols:
+	cpi col, 0 					; Check if we have a star
+	breq star
+	cpi col, 1 					; or if we have zero
+	breq zero
+	ldi temp1, '#' 				; if not we have hash
+	
+
+	
+	jmp convert_end				; display on LCD
+
+star:
+	ldi temp1, '*' 				; Set to star
+		
+	jmp convert_end				; display on LCD
+zero:
+	ldi temp1, '0' 				; Set to zero
+	
+	ldi temp2, 0x1				; check if A mode is actived
+	cp keyflag, temp2
+	brge convert_end_A_Mode
+	
+	jmp convert_end				; display on LCD
+
+
+;====================================================================
+;
+;Keypad Section
+;
+;====================================================================	
+	
+
+convert_end_A_Mode:
+	
+	EntryDestinationCheck temp1	;process of set up destination in Auto mode, temp1 as input value
+
+	rjmp looptmp
+
+convert_end:					
+
+	cpi temp1, '1'			; U-up
+	breq dir_U
+
+	cpi temp1, '2'			; F-forward
+	breq dir_F
+
+	cpi temp1, '3'			; D-down
+	breq dir_D
+
+	cpi temp1, '4'			; L-left
+	breq dir_L
+
+	cpi temp1, '6'			; R-right
+	breq dir_R
+
+	cpi temp1, '#'			; take off/ land
+	breq key_H
+
+	cpi temp1, '*'			; hovering/resume
+	breq key_S
+
+	cpi temp1, 'A'			; Auto mode
+	breq A_gap
+	
+	cpi temp1, 'B'			; confirm key
+	breq B_gap
+	
+	cpi temp1, 'C'			; speed up
+	breq C_gap
+
+	cpi temp1, 'D'			; speed down
+	breq D_gap
+
+looptmp:
+	;Delay 120ms
+	ldi temp2, 60		; slow down the scan operation.
+
+delay2: 
+
+	rcall sleep_5ms		; sleep for 5ms each time
+	dec temp2
+	brne delay2
+
+jmmain:
+	jmp main
+
+;---------------------------button 1----------------------------------
+
+dir_U:
+
+	ldi temp1, 0b1			; show led bar with 1, to indicated button 1 is pressed
+	out PORTC, temp1
+
+	ldi temp1, 'U'
+	mov dir_val, temp1
+	rjmp looptmp
+
+
+;---------------------------button 2----------------------------------
+dir_F:
+	ldi temp1, 0b11			; show led bar with 2, to indicated button 2 is pressed
+	out PORTC, temp1
+	
+	ldi temp1, 'F'
+	mov dir_val, temp1
+	rjmp looptmp
+
+
+;---------------------------button 3----------------------------------
+
+dir_D:
+
+	ldi temp1, 0b111		; show led bar with 3, to indicated button 3 is pressed
+	out PORTC, temp1
+	
+	ldi temp1, 'D'
+	mov dir_val, temp1
+	rjmp looptmp
+
+
+;---------------------------button 4----------------------------------
+	
+dir_L:
+
+	ldi temp1, 0b1111		; show led bar with 4, to indicated button 4 is pressed
+	out PORTC, temp1
+	
+	ldi temp1, 'L'
+	mov dir_val, temp1
+	rjmp looptmp
+
+
+
+;---------------------------button 6----------------------------------
+
+dir_R:
+
+	ldi temp1, 0b111111		; show led bar with 6, to indicated button 6 is pressed
+	out PORTC, temp1
+	
+	ldi temp1, 'R'
+	mov dir_val, temp1
+	rjmp looptmp
+
+
+;---------------------------button #----------------------------------
+
+key_H:
+
+	ldi temp1, 0x1				; check if A mode is actived
+	cp keyflag, temp1
+	breq looptmp				; void 
+
+	ldi temp1, 0b11110001		; show led bar with 6, to indicated button 6 is pressed
+	out PORTC, temp1
+	
+	
+	cpi curspeed, 0
+	breq takeoff
+	rjmp landing
+
+takeoff:
+	ldi temp1, 0x1
+	mov curspeed, temp1
+	ldi temp1, 'U'
+	mov dir_val, temp1
+	rjmp looptmp
+
+landing:
+	ldi temp1, 'D'
+	mov dir_val, temp1
+	rjmp looptmp
+
+
+;---------------------------button *----------------------------------
+
+key_S:
+
+	ldi temp1, 0x1				; check if A mode is actived
+	cp keyflag, temp1
+	breq looptmp				; void 
+
+	ldi temp1, 0b11110011		; show led bar with 6, to indicated button 6 is pressed
+	out PORTC, temp1
+	
+	com dir_val
+	rjmp looptmp
+
+
+	rjmp A_continue
+A_gap:
+	rjmp key_A		; Relative brach out of reach
+A_continue:
+
+	rjmp B_continue
+B_gap:
+	rjmp key_B		; Relative brach out of reach
+B_continue:
+
+	rjmp C_continue
+C_gap:
+	rjmp key_C		; Relative brach out of reach
+C_continue:
+
+	rjmp D_continue
+D_gap:
+	rjmp key_D		; Relative brach out of reach
+D_continue:
+
+;---------------------------button A----------------------------------
+
+key_A:
+
+	ldi temp1, 0b00010111		; show led bar with 6, to indicated button 6 is pressed
+	out PORTC, temp1
+
+	
+	cpi curspeed, 0				; prevent key press during flying
+	brne toEnd
+	
+	cpi mode, 'M'				; check if manual mode
+	breq toAmode				; if M mode, jump to Auto mode
+	ldi mode, 'M'				; otherwise, load as M mode
+	rjmp toReset				; reset LCD message
+toAmode:
+	ldi mode, 'A'				; update to A mode
+	
+	rjmp toReset
+toEnd:
+	rjmp toEndloop
+toReset:
+
+	ResetModeMessage			; update LCD message
+
+toEndloop:
+	jmp looptmp
+
+
+;---------------------------button B----------------------------------
+
+key_B:
+	
+	ldi temp1, 0b00110111		
+	out PORTC, temp1
+
+	cpi curspeed, 0				; prevent key press during flying
+	brne B_key_nearby
+	
+	cpi mode, 'M'				; confirm button
+	breq B_takeoff				; if M mode, show message for next instruction
+
+	rjmp B_key_continue			; otherwise confirm input in A mode
+B_key_nearby:
+	rjmp B_end
+
+B_takeoff:						; show message: "M mode selected, Key # to takeoff"
+	do_lcd_command 0b00000001 	; clear display
+	
+	print_lcd 'M'
+	do_lcd_command 0b00010100	;space
+	print_lcd 'm'
+	print_lcd 'o'
+	print_lcd 'd'
+	print_lcd 'e'
+	do_lcd_command 0b00010100	;space
+	print_lcd 's'
+	print_lcd 'e'
+	print_lcd 'l'
+	print_lcd 'e'
+	print_lcd 'c'
+	print_lcd 't'
+	print_lcd 'e'
+	print_lcd 'd'
+
+	do_lcd_command 0b11000000 	;move to next line
+
+	;do_lcd_data position
+	print_lcd 'K'
+	print_lcd 'e'
+	print_lcd 'y'
+	do_lcd_command 0b00010100	;space
+	print_lcd '#'
+	do_lcd_command 0b00010100	;space
+	print_lcd 't'
+	print_lcd 'o'
+	do_lcd_command 0b00010100	;space
+	print_lcd 't'
+	print_lcd 'a'
+	print_lcd 'k'
+	print_lcd 'e'
+	print_lcd 'o'
+	print_lcd 'f'
+	print_lcd 'f'
+
+	rjmp B_end	
+B_key_continue:					; under A mode
+	;confirm input
+	ldi temp2, 0x1				; check if it is the first pressed for confirm Mode
+	cp keyflag, temp2			; if keyflag active, it is under 2nd press to confirm input
+	brge AutoFlying				; Auto mode takeoff
+	rjmp EntryPosition			; 1st pressed to confirm A mode
+
+AutoFlying:
+
+	StartAutoFlying				; UAV take off, flying~
+	rjmp looptmp
+
+EntryPosition:
+	SetDestination				; execute new input for auto mode
+
+B_end:
+	
+	rjmp looptmp
+
+;---------------------------button C----------------------------------
+
+key_C:		; speed up
+
+	ldi temp1, 0b01110111		
+	out PORTC, temp1
+
+	inc curspeed				; increase speed
+	
+	cpi curspeed, 4				; limit max speed to 4
+	brge maxSpeed
+	rjmp updateMotor_1
+
+	maxSpeed:
+		ldi temp1, 0x04
+		mov curspeed, temp1
+	updateMotor_1:
+		MOTOR_SPEED				; update motor speed
+	
+	rjmp looptmp
+
+;---------------------------button D----------------------------------
+
+key_D:		; speed down
+
+	ldi temp1, 0b11110111		
+	out PORTC, temp1
+
+	dec curspeed				; decrease speed
+	cpi curspeed, 1				; limit min speed to 1
+	brlo minSpeed
+	rjmp updateMotor_2
+	minSpeed:
+		ldi temp1, 0x01
+		mov curspeed, temp1
+	updateMotor_2:
+		MOTOR_SPEED				; update motor speed
+	
+	rjmp looptmp
+
+
+;====================================================================
+;
+;LCD Section: General set up
+;
+;====================================================================
+
+
+;
+; Send a command to the LCD (r16)
+;
+
+lcd_command:
+	STORE LCD_DATA_PORT, r16
+	rcall sleep_1ms
+	lcd_set LCD_E
+	rcall sleep_1ms
+	lcd_clr LCD_E
+	rcall sleep_1ms
+	ret
+
+lcd_data:
+	STORE LCD_DATA_PORT, r16
+	lcd_set LCD_RS
+	rcall sleep_1ms
+	lcd_set LCD_E
+	rcall sleep_1ms
+	lcd_clr LCD_E
+	rcall sleep_1ms
+	lcd_clr LCD_RS
+	ret
+
+lcd_wait:
+	push r16
+	clr r16
+	STORE LCD_DATA_DDR, r16
+	STORE LCD_DATA_PORT, r16
+	lcd_set LCD_RW
+lcd_wait_loop:
+	rcall sleep_1ms
+	lcd_set LCD_E
+	rcall sleep_1ms
+	LOAD r16, LCD_DATA_PIN
+	lcd_clr LCD_E
+	sbrc r16, 7
+	rjmp lcd_wait_loop
+	lcd_clr LCD_RW
+	ser r16
+	STORE LCD_DATA_DDR, r16
+	pop r16
+	ret
+
+.equ F_CPU = 16000000
+.equ DELAY_1MS = F_CPU / 4 / 1000 - 4
+; 4 cycles per iteration - setup/call-return overhead
+
+sleep_1ms:
+	push r24
+	push r25
+	ldi r25, high(DELAY_1MS)
+	ldi r24, low(DELAY_1MS)
+delayloop_1ms:
+	sbiw r25:r24, 1
+	brne delayloop_1ms
+	pop r25
+	pop r24
+	ret
+
+sleep_5ms:
+	rcall sleep_1ms
+	rcall sleep_1ms
+	rcall sleep_1ms
+	rcall sleep_1ms
+	rcall sleep_1ms
+	ret
