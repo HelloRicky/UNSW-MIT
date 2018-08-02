@@ -72,7 +72,7 @@ def histogram_grey_level(data):
 
 
 if __name__ == "__main__":
-  img_file_1 = 'DataSamples/1.png'
+  img_file_1 = 'DataSamples/7.png'
   img_file_2 = 'DataSamples/6.png'
   
   imgOut = 'image3.png'
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
   ## Q3
   ## level = [5,3,1]
-  quantization(img1, imgOut, level=3)
+  quantization(img1, imgOut, level=5)
   
   ## Q4
   #image_enhancement(img1, imgOut)
